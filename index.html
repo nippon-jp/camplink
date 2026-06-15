@@ -241,7 +241,11 @@
       const [showAdminModal, setShowAdminModal] = useState(false);
       const [adminIdInput, setAdminIdInput] = useState('');
       const [adminPasswordInput, setAdminPasswordInput] = useState('');
+      
+      // 大本の設定ステート（認証・他タブ等と連動する用）
       const [adminCredentials, setAdminCredentials] = useState(DEFAULT_ADMIN_CREDENTIALS);
+      // 入力・編集フォーム専用の一時ステート（定期的な同期との衝突を完全に防ぐ）
+      const [adminSettingsForm, setAdminSettingsForm] = useState(DEFAULT_ADMIN_CREDENTIALS);
 
       const [reservations, setReservations] = useState([]);
       const [chatMessages, setChatMessages] = useState([]);
@@ -330,12 +334,19 @@
       const handleUpdateAdminSettings = (e) => {
         e.preventDefault();
         if (isDemo) {
-          setLocalData('admin_settings', adminCredentials);
+          setLocalData('admin_settings', adminSettingsForm);
+          setAdminCredentials(adminSettingsForm); // 大本の値も即時反映
           showAlert("管理者認証・アカウント設定を保存しました！", "success");
         } else {
-          dbObj.collection('artifacts').doc(currentAppId).collection('public').doc('data').collection('admin_settings').doc('config').set(adminCredentials)
-            .then(() => showAlert("管理者設定をクラウド（Firestore）に同期しました！", "success"))
-            .catch(() => showAlert("管理者設定の保存に失敗しました。", "error"));
+          dbObj.collection('artifacts').doc(currentAppId).collection('public').doc('data').collection('admin_settings').doc('config').set(adminSettingsForm)
+            .then(() => {
+              setAdminCredentials(adminSettingsForm); // 大本の値も即時反映
+              showAlert("管理者設定をクラウド（Firestore）に同期しました！", "success");
+            })
+            .catch((err) => {
+              console.error(err);
+              showAlert("管理者設定の保存に失敗しました。", "error");
+            });
         }
       };
 
@@ -499,7 +510,23 @@
         }
       }, [user, isDemo]);
 
-      // 3. 予約・チャット・イベント・管理者設定 同期
+      // 3. 大本の管理者データロード（初回またはisDemo遷移時）
+      useEffect(() => {
+        if (isDemo) {
+          const savedAdmin = getLocalData('admin_settings', DEFAULT_ADMIN_CREDENTIALS);
+          setAdminCredentials(savedAdmin);
+          setAdminSettingsForm(savedAdmin);
+        }
+      }, [isDemo]);
+
+      // 大本の管理者設定値が変わった際にフォーム用ステートにも同期（保存成功時など）
+      useEffect(() => {
+        if (adminCredentials) {
+          setAdminSettingsForm(adminCredentials);
+        }
+      }, [adminCredentials]);
+
+      // 4. 予約・チャット・イベント 同期（定期的な同期からは管理者設定を完全に独立）
       useEffect(() => {
         if (!user) return;
 
@@ -558,7 +585,6 @@
             setReservations(getLocalData('reservations', []));
             setChatMessages(getLocalData('chat_messages', []));
             setEventsList(getLocalData('events', []));
-            setAdminCredentials(getLocalData('admin_settings', DEFAULT_ADMIN_CREDENTIALS));
           };
           updateLocalData();
           
@@ -977,7 +1003,7 @@
             </div>
           )}
 
-          {/* 管理者ログイン画面（IDとパスワードの2重シークレット認証） */}
+          {/* 管理者ログイン画面 */}
           {showAdminModal && (
             <div className="fixed inset-0 z-50 bg-stone-900/60 flex items-center justify-center p-4 backdrop-blur-sm">
               <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl border border-stone-200 animate-fadeIn">
@@ -1828,8 +1854,8 @@
                           <input
                             type="text"
                             required
-                            value={adminCredentials.adminId}
-                            onChange={(e) => setAdminCredentials({ ...adminCredentials, adminId: e.target.value })}
+                            value={adminSettingsForm.adminId}
+                            onChange={(e) => setAdminSettingsForm({ ...adminSettingsForm, adminId: e.target.value })}
                             className="w-full px-4 py-2 bg-stone-800 border border-stone-700 text-stone-100 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none text-sm transition"
                           />
                         </div>
@@ -1838,8 +1864,8 @@
                           <input
                             type="password"
                             required
-                            value={adminCredentials.adminPassword}
-                            onChange={(e) => setAdminCredentials({ ...adminCredentials, adminPassword: e.target.value })}
+                            value={adminSettingsForm.adminPassword}
+                            onChange={(e) => setAdminSettingsForm({ ...adminSettingsForm, adminPassword: e.target.value })}
                             className="w-full px-4 py-2 bg-stone-800 border border-stone-700 text-stone-100 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none text-sm transition"
                           />
                         </div>
@@ -1851,7 +1877,7 @@
                           <input
                             type="text"
                             required
-                            value={adminCredentials.adminName}
+                            value={adminSettingsForm.adminName}
                             onChange={(e) => setAdminCredentials({ ...adminCredentials, adminName: e.target.value })}
                             className="w-full px-4 py-2 bg-stone-800 border border-stone-700 text-stone-100 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none text-sm transition"
                           />
@@ -1859,8 +1885,8 @@
                         <div>
                           <label className="block text-xs font-bold text-stone-400 mb-1">管理人アバターカラー</label>
                           <select
-                            value={adminCredentials.adminAvatarColor}
-                            onChange={(e) => setAdminCredentials({ ...adminCredentials, adminAvatarColor: e.target.value })}
+                            value={adminSettingsForm.adminAvatarColor}
+                            onChange={(e) => setAdminSettingsForm({ ...adminSettingsForm, adminAvatarColor: e.target.value })}
                             className="w-full px-4 py-2 bg-stone-800 border border-stone-700 text-stone-100 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none text-sm transition"
                           >
                             <option value="bg-stone-900">チャコールストーン (黒系)</option>

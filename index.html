@@ -1,0 +1,1107 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { initializeApp } from 'firebase/app';
+import { 
+  getAuth, 
+  signInWithCustomToken, 
+  signInAnonymously, 
+  onAuthStateChanged, 
+  GoogleAuthProvider, 
+  signInWithPopup, 
+  linkWithPopup,
+  signOut
+} from 'firebase/auth';
+import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+
+// --- Firebase初期化 ---
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'camp-link-app';
+
+const Icons = {
+  Tent: () => (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3L2 20h20L12 3z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v17M12 12l5 8M12 12l-5 8" />
+    </svg>
+  ),
+  Calendar: () => (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+  ),
+  Chat: () => (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+    </svg>
+  ),
+  User: () => (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+    </svg>
+  ),
+  Map: () => (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+    </svg>
+  ),
+  Plus: () => (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+    </svg>
+  ),
+  Trash: () => (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+    </svg>
+  ),
+  Edit: () => (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+    </svg>
+  ),
+  Info: () => (
+    <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
+  Check: () => (
+    <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+    </svg>
+  ),
+  Google: () => (
+    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+    </svg>
+  )
+};
+
+const SITE_TYPES = [
+  { id: 'trailer_and_site', name: 'トレーラハウス＋キャンプサイト', color: 'bg-teal-100 text-teal-800 border-teal-300' },
+  { id: 'trailer', name: 'トレーラーハウス', color: 'bg-indigo-100 text-indigo-800 border-indigo-300' },
+  { id: 'site', name: 'キャンプサイト', color: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
+];
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [activeTab, setActiveTab] = useState('calendar'); // 'calendar' | 'profile' | 'chat' | 'guide'
+  const [profile, setProfile] = useState({
+    nickname: '',
+    campStyle: 'ファミリー',
+    favoriteGear: '',
+    bio: '',
+    avatarColor: 'bg-emerald-600',
+    googleLinked: false,
+    googleEmail: ''
+  });
+  
+  const [reservations, setReservations] = useState([]);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  
+  // モーダル・フォーム用のステート
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState('');
+  
+  const [reservationForm, setReservationForm] = useState({
+    id: null,
+    siteType: 'site',
+    nights: 1,
+    guestCount: 2,
+    memo: ''
+  });
+  
+  // チャット用のステート
+  const [newMessage, setNewMessage] = useState('');
+  const chatEndRef = useRef(null);
+  
+  // 通知/メッセージダイアログ
+  const [alertMsg, setAlertMsg] = useState(null);
+
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    onCancel: () => {}
+  });
+
+  const showAlert = (message, type = 'info') => {
+    setAlertMsg({ message, type });
+    setTimeout(() => setAlertMsg(null), 4000);
+  };
+
+  const showConfirm = (title, message, onConfirm) => {
+    setConfirmModal({
+      isOpen: true,
+      title,
+      message,
+      onConfirm: () => {
+        onConfirm();
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+      },
+      onCancel: () => {
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+      }
+    });
+  };
+
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (error) {
+        console.error("Auth error:", error);
+        showAlert("認証に失敗しました。再試行してください。", "error");
+      }
+    };
+    initAuth();
+    
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        setProfile(prev => ({
+          ...prev,
+          nickname: prev.nickname || `キャンパー_${currentUser.uid.substring(0, 5)}`
+        }));
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    
+    const profileDocRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'info');
+    
+    const unsubscribe = onSnapshot(profileDocRef, (docSnap) => {
+      const isGoogleLinked = user.providerData.some(p => p.providerId === 'google.com');
+      const googleEmail = user.providerData.find(p => p.providerId === 'google.com')?.email || '';
+
+      if (docSnap.exists()) {
+        setProfile({
+          ...docSnap.data(),
+          googleLinked: isGoogleLinked,
+          googleEmail: googleEmail
+        });
+      } else {
+        const defaultProfile = {
+          nickname: user.displayName || `キャンパー_${user.uid.substring(0, 5)}`,
+          campStyle: 'ソロ',
+          favoriteGear: '自慢のテント',
+          bio: 'キャンプ初心者です！焚き火が大好きです。',
+          avatarColor: ['bg-emerald-600', 'bg-amber-600', 'bg-blue-600', 'bg-indigo-600', 'bg-orange-600'][Math.floor(Math.random() * 5)],
+          googleLinked: isGoogleLinked,
+          googleEmail: googleEmail
+        };
+        setDoc(profileDocRef, defaultProfile);
+        setProfile(defaultProfile);
+      }
+    }, (error) => {
+      console.error("Profile snapshot error:", error);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const resCollection = collection(db, 'artifacts', appId, 'public', 'data', 'reservations');
+    const unsubscribeRes = onSnapshot(resCollection, (snapshot) => {
+      const list = [];
+      snapshot.forEach((doc) => {
+        list.push({ id: doc.id, ...doc.data() });
+      });
+      setReservations(list);
+    }, (error) => {
+      console.error("Reservations snapshot error:", error);
+    });
+
+    const chatCollection = collection(db, 'artifacts', appId, 'public', 'data', 'chat_messages');
+    const unsubscribeChat = onSnapshot(chatCollection, (snapshot) => {
+      const list = [];
+      snapshot.forEach((doc) => {
+        list.push({ id: doc.id, ...doc.data() });
+      });
+      list.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+      setChatMessages(list);
+    }, (error) => {
+      console.error("Chat snapshot error:", error);
+    });
+
+    return () => {
+      unsubscribeRes();
+      unsubscribeChat();
+    };
+  }, [user]);
+
+  useEffect(() => {
+    if (activeTab === 'chat') {
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatMessages, activeTab]);
+
+  const handleGoogleLink = async () => {
+    if (!user) return;
+    const provider = new GoogleAuthProvider();
+    
+    try {
+      if (user.isAnonymous) {
+        const result = await linkWithPopup(user, provider);
+        showAlert("Googleアカウントと安全に連携しました！予約はすべて引き継がれます。", "success");
+
+        const googleName = result.user.displayName || '';
+        const updatedProfile = {
+          ...profile,
+          nickname: profile.nickname.startsWith('キャンパー_') && googleName ? googleName : profile.nickname,
+          googleLinked: true,
+          googleEmail: result.user.email || ''
+        };
+        const profileDocRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'info');
+        await setDoc(profileDocRef, updatedProfile);
+      } else {
+        await signInWithPopup(auth, provider);
+        showAlert("Googleアカウントでログインしました。", "success");
+      }
+    } catch (error) {
+      console.error("Google Link Error:", error);
+      if (error.code === 'auth/credential-already-in-use') {
+        showConfirm(
+          "アカウントの切り替え",
+          "このGoogleアカウントは既に登録されています。データが保存されている既存アカウントに切り替えますか？（現在の未保存データは失われる場合があります）",
+          async () => {
+            try {
+              await signInWithPopup(auth, provider);
+              showAlert("既存のGoogleアカウントでログインしました。", "success");
+            } catch (signInErr) {
+              console.error(signInErr);
+              showAlert("切り替えログインに失敗しました。", "error");
+            }
+          }
+        );
+      } else {
+        showAlert(`Googleアカウント連携に失敗しました: ${error.message}`, "error");
+      }
+    }
+  };
+
+  const handleSignOut = () => {
+    showConfirm(
+      "ログアウト確認",
+      "ログアウトしますか？（ログアウト後は再度ログインするか、一時ゲストとしてログインし直します）",
+      async () => {
+        try {
+          await signOut(auth);
+          await signInAnonymously(auth);
+          showAlert("ログアウトしました。一時ゲストユーザーとして利用可能です。", "info");
+        } catch (error) {
+          console.error(error);
+          showAlert("ログアウトに失敗しました。", "error");
+        }
+      }
+    );
+  };
+
+  const handleUpdateProfile = async (e) => {
+    e.preventDefault();
+    if (!user) return;
+    try {
+      const profileDocRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'info');
+      await setDoc(profileDocRef, profile);
+      showAlert("プロフィールを登録・更新しました！", "success");
+    } catch (error) {
+      console.error(error);
+      showAlert("保存に失敗しました。", "error");
+    }
+  };
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !user) return;
+
+    try {
+      const chatCollection = collection(db, 'artifacts', appId, 'public', 'data', 'chat_messages');
+      await addDoc(chatCollection, {
+        userId: user.uid,
+        userName: profile.nickname || '名無しキャンパー',
+        avatarColor: profile.avatarColor || 'bg-emerald-600',
+        message: newMessage,
+        createdAt: Date.now()
+      });
+      setNewMessage('');
+    } catch (error) {
+      console.error(error);
+      showAlert("メッセージの送信に失敗しました。", "error");
+    }
+  };
+
+  const handleSaveReservation = async (e) => {
+    e.preventDefault();
+    if (!user) return;
+
+    const isConflict = reservations.some(res => 
+      res.date === selectedDate && 
+      res.siteType === reservationForm.siteType && 
+      res.id !== reservationForm.id
+    );
+
+    if (isConflict) {
+      showAlert("申し訳ありません。その日付の指定されたサイトは、すでに別の予約が入っています。", "error");
+      return;
+    }
+
+    try {
+      const resCollection = collection(db, 'artifacts', appId, 'public', 'data', 'reservations');
+      
+      if (reservationForm.id) {
+        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'reservations', reservationForm.id);
+        await updateDoc(docRef, {
+          siteType: reservationForm.siteType,
+          nights: Number(reservationForm.nights),
+          guestCount: Number(reservationForm.guestCount),
+          memo: reservationForm.memo,
+          userName: profile.nickname
+        });
+        showAlert("予約を変更しました！", "success");
+      } else {
+        await addDoc(resCollection, {
+          userId: user.uid,
+          userName: profile.nickname || '名無しキャンパー',
+          date: selectedDate,
+          siteType: reservationForm.siteType,
+          nights: Number(reservationForm.nights),
+          guestCount: Number(reservationForm.guestCount),
+          memo: reservationForm.memo,
+          createdAt: Date.now()
+        });
+        showAlert("予約を登録しました！キャンプでお待ちしております。", "success");
+      }
+      setIsModalOpen(false);
+    } catch (error) {
+      console.error(error);
+      showAlert("予約の登録に失敗しました。", "error");
+    }
+  };
+
+  const handleDeleteReservation = (resId) => {
+    showConfirm(
+      "予約のキャンセル",
+      "本当にこの予約をキャンセル（削除）しますか？この操作は取り消せません。",
+      async () => {
+        try {
+          const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'reservations', resId);
+          await deleteDoc(docRef);
+          showAlert("予約をキャンセルしました。", "success");
+          setIsModalOpen(false);
+        } catch (error) {
+          console.error(error);
+          showAlert("削除に失敗しました。", "error");
+        }
+      }
+    );
+  };
+
+  const getDaysInMonth = (date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const days = new Date(year, month + 1, 0).getDate();
+    const firstDayIndex = new Date(year, month, 1).getDay();
+    
+    const daysArray = [];
+    for (let i = 0; i < firstDayIndex; i++) {
+      daysArray.push(null);
+    }
+    for (let i = 1; i <= days; i++) {
+      daysArray.push(new Date(year, month, i));
+    }
+    return daysArray;
+  };
+
+  const changeMonth = (offset) => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + offset, 1));
+  };
+
+  const formatDateString = (date) => {
+    if (!date) return '';
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
+  const days = getDaysInMonth(currentDate);
+  const monthNames = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"];
+
+  const handleDateClick = (date) => {
+    if (!date) return;
+    const formatted = formatDateString(date);
+    setSelectedDate(formatted);
+    
+    const existing = reservations.find(r => r.date === formatted && r.userId === user?.uid);
+    
+    if (existing) {
+      setReservationForm({
+        id: existing.id,
+        siteType: existing.siteType,
+        nights: existing.nights,
+        guestCount: existing.guestCount,
+        memo: existing.memo || ''
+      });
+    } else {
+      setReservationForm({
+        id: null,
+        siteType: 'site',
+        nights: 1,
+        guestCount: 2,
+        memo: ''
+      });
+    }
+    setIsModalOpen(true);
+  };
+
+  return (
+    <div className="min-h-screen bg-stone-50 text-stone-800 flex flex-col font-sans">
+      {/* 通知アラートトースター */}
+      {alertMsg && (
+        <div className={`fixed top-4 right-4 z-50 flex items-center p-4 rounded-xl shadow-lg border transition-all duration-300 max-w-sm ${
+          alertMsg.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 
+          alertMsg.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-blue-50 border-blue-200 text-blue-800'
+        }`}>
+          <div className="mr-3">
+            {alertMsg.type === 'success' ? <Icons.Check /> : <Icons.Info />}
+          </div>
+          <p className="text-sm font-semibold">{alertMsg.message}</p>
+        </div>
+      )}
+
+      {/* カスタム確認モーダル (標準のconfirm()を代替) */}
+      {confirmModal.isOpen && (
+        <div className="fixed inset-0 z-50 bg-stone-900/60 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl border border-stone-200 animate-fadeIn">
+            <div className="p-5">
+              <h3 className="font-bold text-lg text-stone-900 mb-2">{confirmModal.title}</h3>
+              <p className="text-stone-600 text-sm leading-relaxed mb-6">{confirmModal.message}</p>
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={confirmModal.onCancel}
+                  className="px-4 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold rounded-lg text-sm transition"
+                >
+                  キャンセル
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmModal.onConfirm}
+                  className="px-4 py-2 bg-emerald-850 hover:bg-emerald-700 text-white font-bold rounded-lg text-sm transition"
+                >
+                  確認
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ヘッダー */}
+      <header className="bg-emerald-900 text-white shadow-md">
+        <div className="max-w-6xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-700 rounded-lg text-emerald-200">
+              <Icons.Tent />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold tracking-wider">CAMP LINK</h1>
+              <p className="text-xs text-emerald-200">北広島クワカブキャンプ場 予約＆コミュニティ</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-3 bg-emerald-800/80 px-4 py-2 rounded-full border border-emerald-700">
+            <div className={`w-8 h-8 rounded-full ${profile.avatarColor || 'bg-emerald-600'} flex items-center justify-center font-bold text-white text-sm`}>
+              {(profile.nickname || 'G').charAt(0).toUpperCase()}
+            </div>
+            <div className="text-left">
+              <div className="text-xs text-emerald-300">
+                {profile.googleLinked ? "Google連携中" : "一時ゲスト"}
+              </div>
+              <div className="text-sm font-medium leading-tight truncate max-w-[120px]">
+                {profile.nickname || 'ゲスト'}
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* ナビゲーションタブ */}
+      <nav className="bg-white border-b border-stone-200 sticky top-0 z-40 shadow-sm">
+        <div className="max-w-6xl mx-auto px-2 flex justify-around">
+          <button
+            onClick={() => setActiveTab('calendar')}
+            className={`flex flex-col sm:flex-row items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-all duration-200 ${
+              activeTab === 'calendar' ? 'border-emerald-700 text-emerald-800' : 'border-transparent text-stone-500 hover:text-stone-800'
+            }`}
+          >
+            <Icons.Calendar />
+            <span>予約カレンダー</span>
+          </button>
+          
+          <button
+            onClick={() => setActiveTab('chat')}
+            className={`flex flex-col sm:flex-row items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-all duration-200 ${
+              activeTab === 'chat' ? 'border-emerald-700 text-emerald-800' : 'border-transparent text-stone-500 hover:text-stone-800'
+            }`}
+          >
+            <Icons.Chat />
+            <span>焚き火チャット</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('profile')}
+            className={`flex flex-col sm:flex-row items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-all duration-200 ${
+              activeTab === 'profile' ? 'border-emerald-700 text-emerald-800' : 'border-transparent text-stone-500 hover:text-stone-800'
+            }`}
+          >
+            <Icons.User />
+            <span>メンバー登録・連携</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('guide')}
+            className={`flex flex-col sm:flex-row items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-all duration-200 ${
+              activeTab === 'guide' ? 'border-emerald-700 text-emerald-800' : 'border-transparent text-stone-500 hover:text-stone-800'
+            }`}
+          >
+            <Icons.Map />
+            <span>キャンプ場ガイド</span>
+          </button>
+        </div>
+      </nav>
+
+      {/* メインエリア */}
+      <main className="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6">
+        
+        {/* 1. 予約カレンダー タブ */}
+        {activeTab === 'calendar' && (
+          <div className="space-y-6">
+            <div className="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-stone-100">
+              <div className="flex justify-between items-center mb-6">
+                <button 
+                  onClick={() => changeMonth(-1)}
+                  className="px-4 py-2 text-stone-600 hover:bg-stone-100 rounded-lg border border-stone-200 transition text-sm font-semibold"
+                >
+                  &lt; 先月
+                </button>
+                <h2 className="text-xl sm:text-2xl font-bold text-stone-800 flex items-center gap-2">
+                  <span className="text-emerald-700">{currentDate.getFullYear()}年</span>
+                  <span>{monthNames[currentDate.getMonth()]}</span>
+                </h2>
+                <button 
+                  onClick={() => changeMonth(1)}
+                  className="px-4 py-2 text-stone-600 hover:bg-stone-100 rounded-lg border border-stone-200 transition text-sm font-semibold"
+                >
+                  来月 &gt;
+                </button>
+              </div>
+
+              {/* 曜日ヘッダー */}
+              <div className="grid grid-cols-7 gap-1 text-center font-bold text-stone-500 text-xs mb-2">
+                <div className="text-red-500">日</div>
+                <div>月</div>
+                <div>火</div>
+                <div>水</div>
+                <div>木</div>
+                <div>金</div>
+                <div className="text-blue-500">土</div>
+              </div>
+
+              {/* 日付グリッド */}
+              <div className="grid grid-cols-7 gap-1 sm:gap-2">
+                {days.map((day, index) => {
+                  if (!day) return <div key={`empty-${index}`} className="bg-stone-50/50 rounded-lg min-h-[80px] sm:min-h-[110px]" />;
+                  
+                  const formatted = formatDateString(day);
+                  const dayReservations = reservations.filter(r => r.date === formatted);
+                  const isUserReserved = dayReservations.some(r => r.userId === user?.uid);
+                  const isToday = formatDateString(new Date()) === formatted;
+
+                  return (
+                    <div
+                      key={formatted}
+                      onClick={() => handleDateClick(day)}
+                      className={`min-h-[80px] sm:min-h-[110px] p-1 sm:p-2 border rounded-xl flex flex-col justify-between transition cursor-pointer hover:shadow-md ${
+                        isToday ? 'border-emerald-600 bg-emerald-50/30' : 'border-stone-200 bg-white'
+                      } ${isUserReserved ? 'ring-2 ring-emerald-500 ring-offset-1' : ''}`}
+                    >
+                      <div className="flex justify-between items-center">
+                        <span className={`text-xs sm:text-sm font-bold ${
+                          day.getDay() === 0 ? 'text-red-500' : day.getDay() === 6 ? 'text-blue-500' : 'text-stone-700'
+                        }`}>
+                          {day.getDate()}
+                        </span>
+                        {isToday && (
+                          <span className="bg-emerald-600 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">今日</span>
+                        )}
+                      </div>
+
+                      {/* その日の予約をバッジで表示 */}
+                      <div className="mt-1 space-y-1 overflow-y-auto max-h-[50px] sm:max-h-[70px] custom-scrollbar">
+                        {dayReservations.map(res => {
+                          const siteInfo = SITE_TYPES.find(s => s.id === res.siteType);
+                          const isOwn = res.userId === user?.uid;
+                          return (
+                            <div 
+                              key={res.id} 
+                              className={`text-[9px] sm:text-[10px] p-0.5 sm:p-1 rounded border leading-tight truncate ${
+                                isOwn ? 'bg-emerald-700 text-white border-emerald-800' : (siteInfo?.color || 'bg-stone-100 text-stone-700')
+                              }`}
+                              title={`${res.userName}: ${siteInfo?.name}`}
+                            >
+                              {isOwn ? '★マイ予約' : res.userName.substring(0, 5)}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 凡例・ガイド */}
+            <div className="bg-stone-100 p-4 rounded-xl border border-stone-200 flex flex-wrap gap-4 items-center justify-between text-sm">
+              <div className="flex flex-wrap gap-3">
+                <span className="font-bold text-stone-700">区画カラー：</span>
+                {SITE_TYPES.map(site => (
+                  <span key={site.id} className={`px-2 py-1 rounded text-xs border ${site.color}`}>
+                    {site.name}
+                  </span>
+                ))}
+              </div>
+              <p className="text-xs text-stone-500">※ご希望の日付をタップすると、予約の作成・変更が可能です。</p>
+            </div>
+          </div>
+        )}
+
+        {/* 2. メンバープロフィール登録・SNS連携 タブ */}
+        {activeTab === 'profile' && (
+          <div className="max-w-2xl mx-auto space-y-6">
+            
+            {/* Google / SNSアカウント連携セクション */}
+            <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-stone-100">
+              <h3 className="text-lg font-bold text-stone-800 mb-2 flex items-center gap-2">
+                <span>🔒 SNSアカウント連携</span>
+              </h3>
+              <p className="text-stone-500 text-xs mb-4 leading-relaxed">
+                Googleアカウントと連携すると、デバイスを切り替えても予約カレンダーの同期や、お気に入りプロフィール、チャットのニックネームが恒久的に保持されます。
+              </p>
+
+              {profile.googleLinked ? (
+                <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-emerald-100 rounded-full text-emerald-800">
+                      <Icons.Google />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-emerald-950">Googleアカウント連携済み</p>
+                      <p className="text-xs text-stone-500">{profile.googleEmail}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleSignOut}
+                    className="px-4 py-2 border border-stone-200 hover:bg-stone-100 text-stone-600 rounded-xl text-xs font-semibold transition"
+                  >
+                    ログアウトする
+                  </button>
+                </div>
+              ) : (
+                <div className="bg-amber-50/50 border border-amber-100 rounded-xl p-5 text-center space-y-4">
+                  <div className="text-sm text-amber-900 leading-relaxed font-medium">
+                    現在は「一時ゲストアカウント」です。Googleと連携して、安全にデータをバックアップしましょう。
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleGoogleLink}
+                    className="w-full sm:w-auto px-6 py-3 bg-white hover:bg-stone-50 text-stone-700 font-bold rounded-xl shadow border border-stone-200 transition-all duration-200 flex items-center justify-center gap-3 mx-auto"
+                  >
+                    <Icons.Google />
+                    <span>Googleアカウントで連携・ログイン</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* プロフィール詳細フォーム */}
+            <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-stone-100">
+              <div className="text-center mb-6">
+                <h2 className="text-xl sm:text-2xl font-bold text-stone-800">メンバープロフィール詳細設定</h2>
+                <p className="text-sm text-stone-500 mt-1">他のキャンパーに見せたい情報やプレイスタイルを入力しましょう。</p>
+              </div>
+
+              <form onSubmit={handleUpdateProfile} className="space-y-6">
+                {/* アバター選択 */}
+                <div className="flex justify-center gap-4 py-4">
+                  {['bg-emerald-600', 'bg-amber-600', 'bg-blue-600', 'bg-indigo-600', 'bg-orange-600'].map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      onClick={() => setProfile({ ...profile, avatarColor: color })}
+                      className={`w-12 h-12 rounded-full ${color} flex items-center justify-center text-white font-bold text-lg ring-offset-2 transition-all duration-150 ${
+                        profile.avatarColor === color ? 'ring-4 ring-stone-400 scale-110' : 'hover:scale-105'
+                      }`}
+                    >
+                      {(profile.nickname || 'G').charAt(0).toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-stone-700 mb-1">ニックネーム（表示名）</label>
+                  <input
+                    type="text"
+                    required
+                    value={profile.nickname}
+                    onChange={(e) => setProfile({ ...profile, nickname: e.target.value })}
+                    placeholder="焚き火マスター"
+                    className="w-full px-4 py-2 border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-stone-700 mb-1">キャンプスタイル</label>
+                    <select
+                      value={profile.campStyle}
+                      onChange={(e) => setProfile({ ...profile, campStyle: e.target.value })}
+                      className="w-full px-4 py-2 border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition bg-white"
+                    >
+                      <option value="ソロ">ソロキャンプ</option>
+                      <option value="デュオ">デュオキャンプ</option>
+                      <option value="ファミリー">ファミリーキャンプ</option>
+                      <option value="グループ">グループキャンプ</option>
+                      <option value="グランピング">グランピング派</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-stone-700 mb-1">お気に入りのギア</label>
+                    <input
+                      type="text"
+                      value={profile.favoriteGear}
+                      onChange={(e) => setProfile({ ...profile, favoriteGear: e.target.value })}
+                      placeholder="オイルランタン、チタンマグ"
+                      className="w-full px-4 py-2 border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-stone-700 mb-1">自己紹介（ひとこと）</label>
+                  <textarea
+                    value={profile.bio}
+                    onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
+                    rows="3"
+                    placeholder="主に週末に活動しています。気軽に情報交換しましょう！"
+                    className="w-full px-4 py-2 border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition resize-none"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-3 bg-emerald-800 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2"
+                >
+                  <span>プロフィール情報を保存する</span>
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* 3. 焚き火チャット タブ */}
+        {activeTab === 'chat' && (
+          <div className="bg-white rounded-2xl shadow-sm border border-stone-100 flex flex-col h-[calc(100vh-280px)] min-h-[450px]">
+            {/* チャットヘッダー */}
+            <div className="bg-emerald-50 p-4 rounded-t-2xl border-b border-stone-100 flex justify-between items-center">
+              <div>
+                <h3 className="font-bold text-emerald-950 flex items-center gap-2 text-base">
+                  <span>🔥 キャンプコミュニティチャット</span>
+                </h3>
+                <p className="text-xs text-emerald-700">キャンプ場の情報交換や雑談、現地からの実況にどうぞ！</p>
+              </div>
+              <span className="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-bold">
+                {chatMessages.length} 件のログ
+              </span>
+            </div>
+
+            {/* メッセージ表示エリア */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-amber-50/10">
+              {chatMessages.length === 0 ? (
+                <div className="text-center py-12 text-stone-400">
+                  <p>まだメッセージはありません。</p>
+                  <p className="text-xs mt-1">最初のメッセージを投稿してみましょう！</p>
+                </div>
+              ) : (
+                chatMessages.map((msg) => {
+                  const isOwn = msg.userId === user?.uid;
+                  return (
+                    <div key={msg.id} className={`flex items-start gap-3 ${isOwn ? 'flex-row-reverse' : ''}`}>
+                      {/* アバター */}
+                      <div className={`w-9 h-9 rounded-full ${msg.avatarColor || 'bg-emerald-600'} flex items-center justify-center text-white font-bold text-sm shadow-sm flex-shrink-0`}>
+                        {msg.userName.charAt(0).toUpperCase()}
+                      </div>
+                      
+                      <div className={`flex flex-col max-w-[70%] ${isOwn ? 'items-end' : 'items-start'}`}>
+                        {/* 投稿者名 */}
+                        <span className="text-xs font-semibold text-stone-500 mb-1 px-1">
+                          {msg.userName} {isOwn && <span className="text-[10px] text-emerald-600">(あなた)</span>}
+                        </span>
+                        
+                        {/* 吹き出し */}
+                        <div className={`p-3 rounded-2xl text-sm leading-relaxed shadow-sm ${
+                          isOwn 
+                            ? 'bg-emerald-800 text-white rounded-tr-none' 
+                            : 'bg-stone-100 text-stone-800 rounded-tl-none'
+                        }`}>
+                          <p className="whitespace-pre-wrap break-all">{msg.message}</p>
+                        </div>
+                        
+                        <span className="text-[9px] text-stone-400 mt-1 px-1">
+                          {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+              <div ref={chatEndRef} />
+            </div>
+
+            {/* 送信フォーム */}
+            <form onSubmit={handleSendMessage} className="p-4 border-t border-stone-100 flex gap-2 bg-white rounded-b-2xl">
+              <input
+                type="text"
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                placeholder="メッセージを入力してください..."
+                className="flex-1 px-4 py-2.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition text-sm"
+              />
+              <button
+                type="submit"
+                disabled={!newMessage.trim()}
+                className="px-6 py-2.5 bg-emerald-800 text-white font-bold rounded-xl hover:bg-emerald-700 disabled:bg-stone-200 disabled:text-stone-400 transition"
+              >
+                送信
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* 4. キャンプ場ガイド タブ */}
+        {activeTab === 'guide' && (
+          <div className="space-y-6">
+            <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-stone-100">
+              <h2 className="text-xl sm:text-2xl font-bold text-emerald-950 mb-2 flex items-center gap-2">
+                <span>🌲 北広島クワカブキャンプ場 ガイド</span>
+              </h2>
+              
+              <div className="bg-stone-100 p-3 rounded-xl border border-stone-200 text-xs text-stone-700 mb-6 space-y-1.5">
+                <p className="flex items-center gap-2">
+                  <span className="font-bold text-emerald-800">📍 所在地:</span>
+                  <span>北海道北広島市大曲</span>
+                </p>
+                <p className="flex items-center gap-2">
+                  <span className="font-bold text-emerald-800">🚇 交通アクセス:</span>
+                  <span>JR北海道千歳線「上野幌」駅より 徒歩10分</span>
+                </p>
+              </div>
+
+              <p className="text-stone-600 text-sm leading-relaxed mb-6">
+                「北広島クワカブキャンプ場」は、札幌に隣接する北広島市大曲の豊かな雑木林に位置するプライベートキャンプ場です。
+                駅近徒歩10分という抜群のアクセス性を誇りながらも、一歩足を踏み入れれば、そこは都会の喧騒を忘れさせる静寂の森。
+                クワガタやカブトムシなどの甲虫類が生息する豊かなコナラやクヌギの木々に囲まれており、夏には昆虫採集や自然観察のメッカとして、ファミリーから本格ソロキャンパーまで幅広く愛されています。
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="border border-teal-100 bg-teal-50/20 p-5 rounded-xl">
+                  <h3 className="font-bold text-teal-900 mb-2 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-teal-600"></span>
+                    トレーラハウス＋キャンプサイト
+                  </h3>
+                  <p className="text-xs text-stone-600 leading-relaxed">
+                    快適な空調を備えたトレーラーハウスと、広々とした芝生エリアが融合。上野幌駅からバックパック一つで訪れても、最高のグラマラス・アウトドアをご堪能いただけます。
+                  </p>
+                </div>
+
+                <div className="border border-indigo-100 bg-indigo-50/20 p-5 rounded-xl">
+                  <h3 className="font-bold text-indigo-900 mb-2 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-indigo-600"></span>
+                    トレーラーハウス
+                  </h3>
+                  <p className="text-xs text-stone-600 leading-relaxed">
+                    雨や北海道の涼しい夜でも安心の、暖房・設備完備のアメリカンコテージ仕様。手ぶらでキャンプ気分を味わいたい方や、快適なワーケーションにも最適です。
+                  </p>
+                </div>
+
+                <div className="border border-emerald-100 bg-emerald-50/20 p-5 rounded-xl">
+                  <h3 className="font-bold text-emerald-900 mb-2 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+                    キャンプサイト
+                  </h3>
+                  <p className="text-xs text-stone-600 leading-relaxed">
+                    木漏れ日が心地よく降り注ぐ芝生のフリーサイト。夜には美しい星空を眺め、夏には木々を巡ってクワガタ・カブトムシ探しを楽しめます。
+                  </p>
+                </div>
+              </div>
+
+              {/* 利用ルール */}
+              <div className="mt-8 border-t border-stone-100 pt-6">
+                <h3 className="font-bold text-stone-800 mb-3 text-base">安心してお過ごしいただくためのルール</h3>
+                <ul className="space-y-2 text-xs text-stone-600">
+                  <li className="flex items-start gap-2">
+                    <span className="text-emerald-700">✔</span>
+                    <strong>クワイエットタイム:</strong> 22:00〜翌朝7:00までは静かにお過ごしください。音楽や大きな声での会話はお控えください。
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-emerald-700">✔</span>
+                    <strong>クワカブ（昆虫保護）:</strong> 樹木を傷つけるような採集（トラップの放置、木の皮剥ぎなど）は固く禁止しております。自然を愛する優しさを持って観察しましょう。
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-emerald-700">✔</span>
+                    <strong>直火の禁止:</strong> 地面での直接の焚き火は禁止です。必ず焚き火台とスパッタシート（焚き火シート）をご使用ください。
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* 予約作成・編集ダイアログモーダル */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 bg-stone-900/60 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-xl border border-stone-100 animate-fadeIn">
+            {/* モーダルヘッダー */}
+            <div className="bg-emerald-900 text-white p-4 flex justify-between items-center">
+              <div>
+                <h3 className="font-bold text-base">
+                  {reservationForm.id ? "予約内容の確認・変更" : "キャンプ宿泊予約の登録"}
+                </h3>
+                <p className="text-xs text-emerald-200 mt-0.5">予約日: {selectedDate}</p>
+              </div>
+              <button 
+                onClick={() => setIsModalOpen(false)}
+                className="text-emerald-200 hover:text-white font-bold p-1 rounded-lg hover:bg-emerald-800 transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* モーダルコンテンツ */}
+            <form onSubmit={handleSaveReservation} className="p-5 space-y-4 text-sm">
+              
+              {/* 区画選択 */}
+              <div>
+                <label className="block font-semibold text-stone-700 mb-1">キャンプ区画</label>
+                <select
+                  value={reservationForm.siteType}
+                  onChange={(e) => setReservationForm({ ...reservationForm, siteType: e.target.value })}
+                  className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition bg-white"
+                >
+                  {SITE_TYPES.map(site => (
+                    <option key={site.id} value={site.id}>
+                      {site.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 宿泊日数 & 人数 */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-semibold text-stone-700 mb-1">宿泊日数</label>
+                  <select
+                    value={reservationForm.nights}
+                    onChange={(e) => setReservationForm({ ...reservationForm, nights: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 bg-white"
+                  >
+                    {[1, 2, 3, 4, 5].map(n => (
+                      <option key={n} value={n}>{n} 泊</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-semibold text-stone-700 mb-1">ご利用人数</label>
+                  <select
+                    value={reservationForm.guestCount}
+                    onChange={(e) => setReservationForm({ ...reservationForm, guestCount: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 bg-white"
+                  >
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map(g => (
+                      <option key={g} value={g}>{g} 名</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* ご要望・メモ */}
+              <div>
+                <label className="block font-semibold text-stone-700 mb-1">ご要望・持ち込みテントなど (任意)</label>
+                <textarea
+                  value={reservationForm.memo}
+                  onChange={(e) => setReservationForm({ ...reservationForm, memo: e.target.value })}
+                  placeholder="大型ツールームテントを持ち込みます。ソロですが広めに使いたいです。"
+                  rows="3"
+                  className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition resize-none"
+                />
+              </div>
+
+              {/* アクションボタン */}
+              <div className="pt-2 flex gap-2 justify-end">
+                {reservationForm.id && (
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteReservation(reservationForm.id)}
+                    className="flex items-center gap-1.5 px-4 py-2 border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg font-bold transition mr-auto"
+                  >
+                    <Icons.Trash />
+                    <span>キャンセル</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-lg font-bold transition"
+                >
+                  閉じる
+                </button>
+                
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-emerald-800 hover:bg-emerald-700 text-white rounded-lg font-bold transition flex items-center gap-1.5"
+                >
+                  <span>{reservationForm.id ? "変更を保存" : "予約する"}</span>
+                </button>
+              </div>
+
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* フッター */}
+      <footer className="bg-stone-800 text-stone-400 text-center py-6 border-t border-stone-700 text-xs mt-auto">
+        <p>© 2026 CAMP LINK Co., Ltd. All Rights Reserved.</p>
+        <p className="mt-1 text-stone-500">Firebase & React を利用したリアルタイム同期デモンストレーション</p>
+      </footer>
+    </div>
+  );
+}

@@ -174,6 +174,46 @@
       { id: 'site', name: 'キャンプサイト', color: 'bg-emerald-100 text-emerald-800 border-emerald-300 shadow-sm' },
     ];
 
+    // --- ヘルパー関数群 ---
+    const getDaysInMonth = (date) => {
+      const year = date.getFullYear();
+      const month = date.getMonth();
+      const days = new Date(year, month + 1, 0).getDate();
+      const firstDayIndex = new Date(year, month, 1).getDay();
+      
+      const daysArray = [];
+      for (let i = 0; i < firstDayIndex; i++) {
+        daysArray.push(null);
+      }
+      for (let i = 1; i <= days; i++) {
+        daysArray.push(new Date(year, month, i));
+      }
+      return daysArray;
+    };
+
+    const getDaysInWeek = (date) => {
+      const current = new Date(date);
+      const dayOfWeek = current.getDay();
+      const sunday = new Date(current);
+      sunday.setDate(current.getDate() - dayOfWeek);
+      
+      const week = [];
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(sunday);
+        d.setDate(sunday.getDate() + i);
+        week.push(d);
+      }
+      return week;
+    };
+
+    const formatDateString = (date) => {
+      if (!date) return '';
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    };
+
     function App() {
       const [user, setUser] = useState(null);
       const [activeTab, setActiveTab] = useState('calendar'); // 'calendar' | 'events' | 'chat' | 'profile' | 'guide'
@@ -265,7 +305,7 @@
           setAdminPasswordInput('');
           showAlert("👑 管理者モードでログインしました。全予約の強制変更・チャット削除が可能です。", "success");
         } else {
-          showAlert("パスワードが違います（デモ用は admin123 です）", "error");
+          showAlert("パスワードが違います。", "error");
         }
       };
 
@@ -345,7 +385,7 @@
               creatorId: 'admin_1',
               creatorName: '管理人のひろき',
               avatarColor: 'bg-emerald-800',
-              title: '🦉 真夏の夜のクワガタ＆カブト大追跡ツアー！',
+              title: '🦉 真夏の夜 of クワガタ＆カブト大追跡ツアー！',
               date: '2026-07-18',
               category: '昆虫採集',
               description: '夜20時に管理棟前に集合。コナラの特設バナナトラップ設置ポイントなどを巡り、ミヤマクワガタやカブトムシの生息を探検します！お子様連れのファミリー大歓迎です。',
@@ -732,10 +772,10 @@
       const handleToggleParticipant = (eventId) => {
         const updated = eventsList.map(ev => {
           if (ev.id === eventId) {
-            const isParticipant = ev.participants.some(p => p.userId === user.uid);
+            const isParticipant = ev.participants?.some(p => p.userId === user.uid);
             const nextParticipants = isParticipant
               ? ev.participants.filter(p => p.userId !== user.uid)
-              : [...ev.participants, { userId: user.uid, userName: profile.nickname || 'キャンパー', avatarColor: profile.avatarColor || 'bg-emerald-600' }];
+              : [...(ev.participants || []), { userId: user.uid, userName: profile.nickname || 'キャンパー', avatarColor: profile.avatarColor || 'bg-emerald-600' }];
             return { ...ev, participants: nextParticipants };
           }
           return ev;
@@ -800,55 +840,6 @@
             }
           }
         );
-      };
-
-      const getDaysInMonth = (date) => {
-        const year = date.getFullYear();
-        const month = date.getMonth();
-        const days = new Date(year, month + 1, 0).getDate();
-        const firstDayIndex = new Date(year, month, 1).getDay();
-        
-        const daysArray = [];
-        for (let i = 0; i < firstDayIndex; i++) {
-          daysArray.push(null);
-        }
-        for (let i = 1; i <= days; i++) {
-          daysArray.push(new Date(year, month, i));
-        }
-        return daysArray;
-      };
-
-      const getDaysInWeek = (date) => {
-        const current = new Date(date);
-        const dayOfWeek = current.getDay();
-        const sunday = new Date(current);
-        sunday.setDate(current.getDate() - dayOfWeek);
-        
-        const week = [];
-        for (let i = 0; i < 7; i++) {
-          const d = new Date(sunday);
-          d.setDate(sunday.getDate() + i);
-          week.push(d);
-        }
-        return week;
-      };
-
-      const changeMonth = (offset) => {
-        setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + offset, 1));
-      };
-
-      const changeWeek = (offset) => {
-        const nextDate = new Date(currentDate);
-        nextDate.setDate(currentDate.getDate() + (offset * 7));
-        setCurrentDate(nextDate);
-      };
-
-      const formatDateString = (date) => {
-        if (!date) return '';
-        const y = date.getFullYear();
-        const m = String(date.getMonth() + 1).padStart(2, '0');
-        const d = String(date.getDate()).padStart(2, '0');
-        return `${y}-${m}-${d}`;
       };
 
       const days = getDaysInMonth(currentDate);
@@ -936,7 +927,7 @@
             </div>
           )}
 
-          {}
+          {/* 管理者ログイン画面 */}
           {showAdminModal && (
             <div className="fixed inset-0 z-50 bg-stone-900/60 flex items-center justify-center p-4 backdrop-blur-sm">
               <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl border border-stone-200 animate-fadeIn">
@@ -946,14 +937,13 @@
                 </div>
                 <form onSubmit={handleAdminLoginSubmit} className="p-5 space-y-4">
                   <p className="text-xs text-stone-500 leading-relaxed">
-                    管理者専用パスワードを入力してください。<br/>
-                    <strong className="text-amber-600">※デモ用パスワード: admin123</strong>
+                    管理者専用のシークレットパスワードを入力してください。
                   </p>
                   <div>
                     <input
                       type="password"
                       required
-                      placeholder="パスワードを入力"
+                      placeholder="シークレットパスワードを入力"
                       value={adminPasswordInput}
                       onChange={(e) => setAdminPasswordInput(e.target.value)}
                       className="w-full px-4 py-2 text-sm border border-stone-200 rounded-xl focus:ring-2 focus:ring-stone-800 outline-none"
@@ -1511,9 +1501,9 @@
                     </div>
                   ) : (
                     eventsList.map((ev) => {
-                      const isLiked = ev.likes?.includes(user.uid);
-                      const isParticipant = ev.participants?.some(p => p.userId === user.uid);
-                      const isCreator = ev.creatorId === user.uid || isAdmin; // 管理者は全イベントを強制削除可能
+                      const isLiked = ev.likes?.includes(user?.uid);
+                      const isParticipant = ev.participants?.some(p => p.userId === user?.uid);
+                      const isCreator = ev.creatorId === user?.uid || isAdmin; // 管理者は全イベントを強制削除可能
 
                       return (
                         <div key={ev.id} className="bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden animate-fadeIn">
@@ -1705,7 +1695,6 @@
                             </span>
                             
                             <div className="flex items-center gap-2">
-                              {}
                               {isAdmin && (
                                 <button 
                                   onClick={() => handleDeleteChatMessage(msg.id)}
@@ -1737,7 +1726,26 @@
                 </div>
 
                 {/* 送信フォーム */}
-            {/* 2. メンバープロフィール登録・SNS連携 タブ */}
+                <form onSubmit={handleSendMessage} className="p-4 border-t border-stone-100 flex gap-2 bg-white rounded-b-2xl">
+                  <input
+                    type="text"
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    placeholder="メッセージを入力してください..."
+                    className="flex-1 px-4 py-2.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition text-sm"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!newMessage.trim()}
+                    className="px-6 py-2.5 bg-emerald-800 text-white font-bold rounded-xl hover:bg-emerald-700 disabled:bg-stone-200 disabled:text-stone-400 transition"
+                  >
+                    送信
+                  </button>
+                </form>
+              </div>
+            )}
+
+            {/* 4. メンバープロフィール登録・SNS連携 タブ */}
             {activeTab === 'profile' && (
               <div className="max-w-2xl mx-auto space-y-6">
                 
@@ -1784,11 +1792,10 @@
                     </div>
                   )}
 
-                  {}
                   <div className="mt-6 pt-6 border-t border-stone-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                     <div>
                       <p className="text-xs font-bold text-stone-600">🏕 CAMP LINK システム管理職スタッフの方</p>
-                      <p className="text-[10px] text-stone-400">管理者パスワードを入力して全情報の管理を行います。</p>
+                      <p className="text-[10px] text-stone-400">管理者用画面に移行します。</p>
                     </div>
                     {isAdmin ? (
                       <button
@@ -1917,7 +1924,7 @@
 
                   <p className="text-stone-600 text-sm leading-relaxed mb-6">
                     「北広島クワカブキャンプ場」は、札幌に隣接する北広島市大曲の豊かな雑木林に位置するプライベートキャンプ場です。
-                    駅近徒歩10分という抜群のアクセス性を誇りながらも、一歩足を踏み入れれば、そこは都会の喧騒を忘れさせる静寂の森。
+                    駅近徒歩10分という抜群 of アクセス性を誇りながらも、一歩足を踏み入れれば、そこは都会の喧騒を忘れさせる静寂の森。
                     クワガタやカブトムシなどの甲虫類が生息する豊かなコナラやクヌギの木々に囲まれており、夏には昆虫採集や自然観察のメッカとして、ファミリーから本格ソロキャンパーまで幅広く愛されています。
                   </p>
 

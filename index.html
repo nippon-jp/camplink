@@ -154,19 +154,30 @@
           <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
           <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
         </svg>
+      ),
+      Megaphone: () => (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+        </svg>
+      ),
+      Heart: ({ filled }) => (
+        <svg className={`w-5 h-5 ${filled ? 'fill-red-500 text-red-500' : 'text-stone-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+        </svg>
       )
     };
 
     // キャンプ区画設定
     const SITE_TYPES = [
-      { id: 'trailer_and_site', name: 'トレーラハウス＋キャンプサイト', color: 'bg-teal-100 text-teal-800 border-teal-300' },
-      { id: 'trailer', name: 'トレーラーハウス', color: 'bg-indigo-100 text-indigo-800 border-indigo-300' },
-      { id: 'site', name: 'キャンプサイト', color: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
+      { id: 'trailer_and_site', name: 'トレーラハウス＋キャンプサイト', color: 'bg-teal-100 text-teal-800 border-teal-300 shadow-sm' },
+      { id: 'trailer', name: 'トレーラーハウス', color: 'bg-indigo-100 text-indigo-800 border-indigo-300 shadow-sm' },
+      { id: 'site', name: 'キャンプサイト', color: 'bg-emerald-100 text-emerald-800 border-emerald-300 shadow-sm' },
     ];
 
     function App() {
       const [user, setUser] = useState(null);
-      const [activeTab, setActiveTab] = useState('calendar'); // 'calendar' | 'profile' | 'chat' | 'guide'
+      const [activeTab, setActiveTab] = useState('calendar'); // 'calendar' | 'events' | 'chat' | 'profile' | 'guide'
+      const [calendarMode, setCalendarMode] = useState('monthly'); // 'monthly' | 'weekly' | 'list'
       const [isDemo, setIsDemo] = useState(!useFirebaseRealtime);
       const [profile, setProfile] = useState({
         nickname: '',
@@ -180,7 +191,10 @@
       
       const [reservations, setReservations] = useState([]);
       const [chatMessages, setChatMessages] = useState([]);
+      const [eventsList, setEventsList] = useState([]);
       const [currentDate, setCurrentDate] = useState(new Date());
+      const [listFilter, setListFilter] = useState('all'); // 'all' | 'mine'
+      const [searchTerm, setSearchTerm] = useState('');
       
       // モーダル・フォーム用
       const [isModalOpen, setIsModalOpen] = useState(false);
@@ -192,6 +206,18 @@
         guestCount: 2,
         memo: ''
       });
+
+      // イベント作成パネルトグル
+      const [showEventCreate, setShowEventCreate] = useState(false);
+      const [newEventForm, setNewEventForm] = useState({
+        title: '',
+        date: '',
+        category: '昆虫採集', // '昆虫採集' | '薪割り・焚き火' | 'オフ会・交流'
+        description: ''
+      });
+
+      // イベントごとの一時コメント入力用
+      const [eventComments, setEventComments] = useState({});
       
       // チャット用
       const [newMessage, setNewMessage] = useState('');
@@ -273,12 +299,52 @@
             { id: 'chat_1', userId: 'other_1', userName: 'たくや', avatarColor: 'bg-blue-600', message: 'こんにちは！上野幌駅から本当に歩いてすぐですね！荷物が少なくて助かりました。', createdAt: Date.now() - 3600000 },
             { id: 'chat_2', userId: 'other_2', userName: 'みさと', avatarColor: 'bg-orange-600', message: '夜になるとコナラの木周辺でコクワガタが見つかりましたよ！', createdAt: Date.now() - 1800000 }
           ];
+
+          const defaultEvents = [
+            {
+              id: 'ev_1',
+              creatorId: 'admin_1',
+              creatorName: '管理人のひろき',
+              avatarColor: 'bg-emerald-800',
+              title: '🦉 真夏の夜のクワガタ＆カブト大追跡ツアー！',
+              date: '2026-07-18',
+              category: '昆虫採集',
+              description: '夜20時に管理棟前に集合。コナラの特設バナナトラップ設置ポイントなどを巡り、ミヤマクワガタやカブトムシの生息を探検します！お子様連れのファミリー大歓迎です。',
+              likes: ['other_1', 'other_2'],
+              participants: [
+                { userId: 'other_1', userName: 'たくや', avatarColor: 'bg-blue-600' },
+                { userId: 'other_2', userName: 'みさと', avatarColor: 'bg-orange-600' }
+              ],
+              comments: [
+                { id: 'c_1', userId: 'other_1', userName: 'たくや', text: '子供がめちゃくちゃ楽しみにしてます！道具は何が必要ですか？', createdAt: Date.now() - 7200000 },
+                { id: 'c_2', userId: 'admin_1', userName: '管理人のひろき', text: '懐中電灯と、念のため長袖長ズボン、虫除けスプレーをご持参ください！', createdAt: Date.now() - 3600000 }
+              ]
+            },
+            {
+              id: 'ev_2',
+              creatorId: 'other_1',
+              creatorName: 'たくや',
+              avatarColor: 'bg-blue-600',
+              title: '🔥 自慢のオイルランタンを語り明かすランタンオフ会',
+              date: '2026-06-27',
+              category: 'オフ会・交流',
+              description: 'キャンプサイトBの奥にひっそりと集まって、自慢のビンテージランタンや薪割りの道具を見せ合う大人の交流会をやりませんか？美味しいお酒やコーヒーを淹れます。お気軽に通りすがってください！',
+              likes: ['other_2'],
+              participants: [
+                { userId: 'other_2', userName: 'みさと', avatarColor: 'bg-orange-600' }
+              ],
+              comments: []
+            }
+          ];
           
           if (!localStorage.getItem('camplink_reservations')) {
             setLocalData('reservations', defaultReservations);
           }
           if (!localStorage.getItem('camplink_chat_messages')) {
             setLocalData('chat_messages', defaultChats);
+          }
+          if (!localStorage.getItem('camplink_events')) {
+            setLocalData('events', defaultEvents);
           }
         }
       }, [isDemo]);
@@ -329,7 +395,7 @@
         }
       }, [user, isDemo]);
 
-      // 3. 予約・チャット同期
+      // 3. 予約・チャット・イベント同期
       useEffect(() => {
         if (!user) return;
 
@@ -353,14 +419,26 @@
             setChatMessages(list);
           });
 
+          const eventsCollection = dbObj.collection('artifacts').doc(currentAppId).collection('public').doc('data').collection('events');
+          const unsubscribeEvents = eventsCollection.onSnapshot((snapshot) => {
+            const list = [];
+            snapshot.forEach((doc) => {
+              list.push({ id: doc.id, ...doc.data() });
+            });
+            list.sort((a, b) => b.id.localeCompare(a.id)); // 新しいイベント順
+            setEventsList(list);
+          });
+
           return () => {
             unsubscribeRes();
             unsubscribeChat();
+            unsubscribeEvents();
           };
         } else {
           const updateLocalData = () => {
             setReservations(getLocalData('reservations', []));
             setChatMessages(getLocalData('chat_messages', []));
+            setEventsList(getLocalData('events', []));
           };
           updateLocalData();
           
@@ -547,6 +625,137 @@
         );
       };
 
+      // SNS型イベントコミュニティ機能のアクション
+      const handleCreateEvent = (e) => {
+        e.preventDefault();
+        if (!newEventForm.title || !newEventForm.date || !newEventForm.description) return;
+
+        const eventPayload = {
+          id: 'ev_' + Date.now(),
+          creatorId: user.uid,
+          creatorName: profile.nickname || '名無しキャンパー',
+          avatarColor: profile.avatarColor || 'bg-emerald-600',
+          title: newEventForm.title,
+          date: newEventForm.date,
+          category: newEventForm.category,
+          description: newEventForm.description,
+          likes: [],
+          participants: [],
+          comments: []
+        };
+
+        if (isDemo) {
+          const currentEvents = getLocalData('events', []);
+          setLocalData('events', [eventPayload, ...currentEvents]);
+          showAlert("コミュニティイベントを告知しました！", "success");
+          setShowEventCreate(false);
+          setNewEventForm({ title: '', date: '', category: '昆虫採集', description: '' });
+        } else {
+          dbObj.collection('artifacts').doc(currentAppId).collection('public').doc('data').collection('events').doc(eventPayload.id).set(eventPayload)
+            .then(() => {
+              showAlert("コミュニティイベントを告知しました！", "success");
+              setShowEventCreate(false);
+              setNewEventForm({ title: '', date: '', category: '昆虫採集', description: '' });
+            })
+            .catch(() => showAlert("イベントの作成に失敗しました。", "error"));
+        }
+      };
+
+      const handleToggleLike = (eventId) => {
+        const updated = eventsList.map(ev => {
+          if (ev.id === eventId) {
+            const isLiked = ev.likes.includes(user.uid);
+            const nextLikes = isLiked 
+              ? ev.likes.filter(id => id !== user.uid)
+              : [...ev.likes, user.uid];
+            return { ...ev, likes: nextLikes };
+          }
+          return ev;
+        });
+
+        if (isDemo) {
+          setLocalData('events', updated);
+        } else {
+          const target = updated.find(ev => ev.id === eventId);
+          dbObj.collection('artifacts').doc(currentAppId).collection('public').doc('data').collection('events').doc(eventId).update({
+            likes: target.likes
+          });
+        }
+      };
+
+      const handleToggleParticipant = (eventId) => {
+        const updated = eventsList.map(ev => {
+          if (ev.id === eventId) {
+            const isParticipant = ev.participants.some(p => p.userId === user.uid);
+            const nextParticipants = isParticipant
+              ? ev.participants.filter(p => p.userId !== user.uid)
+              : [...ev.participants, { userId: user.uid, userName: profile.nickname || 'キャンパー', avatarColor: profile.avatarColor || 'bg-emerald-600' }];
+            return { ...ev, participants: nextParticipants };
+          }
+          return ev;
+        });
+
+        if (isDemo) {
+          setLocalData('events', updated);
+          showAlert("参加表明ステータスを更新しました！", "success");
+        } else {
+          const target = updated.find(ev => ev.id === eventId);
+          dbObj.collection('artifacts').doc(currentAppId).collection('public').doc('data').collection('events').doc(eventId).update({
+            participants: target.participants
+          }).then(() => showAlert("参加表明ステータスを更新しました！", "success"));
+        }
+      };
+
+      const handleAddComment = (eventId) => {
+        const commentText = eventComments[eventId];
+        if (!commentText || !commentText.trim()) return;
+
+        const newComment = {
+          id: 'c_' + Date.now(),
+          userId: user.uid,
+          userName: profile.nickname || 'キャンパー',
+          text: commentText,
+          createdAt: Date.now()
+        };
+
+        const updated = eventsList.map(ev => {
+          if (ev.id === eventId) {
+            return { ...ev, comments: [...(ev.comments || []), newComment] };
+          }
+          return ev;
+        });
+
+        if (isDemo) {
+          setLocalData('events', updated);
+          setEventComments(prev => ({ ...prev, [eventId]: '' }));
+        } else {
+          const target = updated.find(ev => ev.id === eventId);
+          dbObj.collection('artifacts').doc(currentAppId).collection('public').doc('data').collection('events').doc(eventId).update({
+            comments: target.comments
+          }).then(() => {
+            setEventComments(prev => ({ ...prev, [eventId]: '' }));
+          });
+        }
+      };
+
+      const handleDeleteEvent = (eventId) => {
+        showConfirm(
+          "イベントの削除",
+          "本当にこのイベント告知を削除しますか？",
+          () => {
+            if (isDemo) {
+              const currentEvents = getLocalData('events', []);
+              setLocalData('events', currentEvents.filter(ev => ev.id !== eventId));
+              showAlert("イベントを削除しました。", "success");
+            } else {
+              dbObj.collection('artifacts').doc(currentAppId).collection('public').doc('data').collection('events').doc(eventId).delete()
+                .then(() => showAlert("イベントを削除しました。", "success"))
+                .catch(() => showAlert("削除に失敗しました。", "error"));
+            }
+          }
+        );
+      };
+
       const getDaysInMonth = (date) => {
         const year = date.getFullYear();
         const month = date.getMonth();
@@ -563,8 +772,29 @@
         return daysArray;
       };
 
+      const getDaysInWeek = (date) => {
+        const current = new Date(date);
+        const dayOfWeek = current.getDay();
+        const sunday = new Date(current);
+        sunday.setDate(current.getDate() - dayOfWeek);
+        
+        const week = [];
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(sunday);
+          d.setDate(sunday.getDate() + i);
+          week.push(d);
+        }
+        return week;
+      };
+
       const changeMonth = (offset) => {
         setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + offset, 1));
+      };
+
+      const changeWeek = (offset) => {
+        const nextDate = new Date(currentDate);
+        nextDate.setDate(currentDate.getDate() + (offset * 7));
+        setCurrentDate(nextDate);
       };
 
       const formatDateString = (date) => {
@@ -576,7 +806,9 @@
       };
 
       const days = getDaysInMonth(currentDate);
+      const weekDays = getDaysInWeek(currentDate);
       const monthNames = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"];
+      const weekNames = ["日", "月", "火", "水", "木", "金", "土"];
 
       const handleDateClick = (date) => {
         if (!date) return;
@@ -697,6 +929,21 @@
                 <Icons.Calendar />
                 <span>予約カレンダー</span>
               </button>
+
+              <button
+                onClick={() => setActiveTab('events')}
+                className={`flex flex-col sm:flex-row items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition-all duration-200 ${
+                  activeTab === 'events' ? 'border-emerald-700 text-emerald-800' : 'border-transparent text-stone-500 hover:text-stone-800'
+                }`}
+              >
+                <Icons.Megaphone />
+                <span className="relative">
+                  イベント・SNS
+                  {eventsList.length > 0 && (
+                    <span className="absolute -top-1.5 -right-3 w-2 h-2 bg-red-500 rounded-full"></span>
+                  )}
+                </span>
+              </button>
               
               <button
                 onClick={() => setActiveTab('chat')}
@@ -736,91 +983,323 @@
             {/* 1. 予約カレンダー タブ */}
             {activeTab === 'calendar' && (
               <div className="space-y-6">
-                <div className="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-stone-100">
-                  <div className="flex justify-between items-center mb-6">
-                    <button 
-                      onClick={() => changeMonth(-1)}
-                      className="px-4 py-2 text-stone-600 hover:bg-stone-100 rounded-lg border border-stone-200 transition text-sm font-semibold"
-                    >
-                      &lt; 先月
-                    </button>
-                    <h2 className="text-xl sm:text-2xl font-bold text-stone-800 flex items-center gap-2">
-                      <span className="text-emerald-700">{currentDate.getFullYear()}年</span>
-                      <span>{monthNames[currentDate.getMonth()]}</span>
-                    </h2>
-                    <button 
-                      onClick={() => changeMonth(1)}
-                      className="px-4 py-2 text-stone-600 hover:bg-stone-100 rounded-lg border border-stone-200 transition text-sm font-semibold"
-                    >
-                      来月 &gt;
-                    </button>
+                
+                {/* 表示モード切り替えヘッダー */}
+                <div className="flex flex-col md:flex-row justify-between items-stretch md:items-center bg-white p-4 rounded-2xl shadow-sm border border-stone-100 gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-stone-500">表示モード:</span>
+                    <div className="inline-flex bg-stone-100 p-1 rounded-xl">
+                      <button
+                        onClick={() => setCalendarMode('monthly')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                          calendarMode === 'monthly' ? 'bg-white text-emerald-900 shadow-sm' : 'text-stone-600 hover:text-stone-900'
+                        }`}
+                      >
+                        月間
+                      </button>
+                      <button
+                        onClick={() => setCalendarMode('weekly')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                          calendarMode === 'weekly' ? 'bg-white text-emerald-900 shadow-sm' : 'text-stone-600 hover:text-stone-900'
+                        }`}
+                      >
+                        週間タイムライン
+                      </button>
+                      <button
+                        onClick={() => setCalendarMode('list')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                          calendarMode === 'list' ? 'bg-white text-emerald-900 shadow-sm' : 'text-stone-600 hover:text-stone-900'
+                        }`}
+                      >
+                        予約リスト表示
+                      </button>
+                    </div>
                   </div>
 
-                  {/* 曜日ヘッダー */}
-                  <div className="grid grid-cols-7 gap-1 text-center font-bold text-stone-500 text-xs mb-2">
-                    <div className="text-red-500">日</div>
-                    <div>月</div>
-                    <div>火</div>
-                    <div>水</div>
-                    <div>木</div>
-                    <div>金</div>
-                    <div className="text-blue-500">土</div>
-                  </div>
-
-                  {/* 日付グリッド */}
-                  <div className="grid grid-cols-7 gap-1 sm:gap-2">
-                    {days.map((day, index) => {
-                      if (!day) return <div key={`empty-${index}`} className="bg-stone-50/50 rounded-lg min-h-[80px] sm:min-h-[110px]" />;
+                  {/* 期間切り替えコントローラー */}
+                  {calendarMode !== 'list' && (
+                    <div className="flex items-center justify-between gap-4">
+                      <button 
+                        onClick={() => calendarMode === 'monthly' ? changeMonth(-1) : changeWeek(-1)}
+                        className="px-3 py-1.5 text-stone-600 hover:bg-stone-100 rounded-lg border border-stone-200 transition text-xs font-semibold flex items-center gap-1"
+                      >
+                        &lt; {calendarMode === 'monthly' ? '先月' : '先週'}
+                      </button>
                       
-                      const formatted = formatDateString(day);
-                      const dayReservations = reservations.filter(r => r.date === formatted);
-                      const isUserReserved = dayReservations.some(r => r.userId === user?.uid);
-                      const isToday = formatDateString(new Date()) === formatted;
-
-                      return (
-                        <div
-                          key={formatted}
-                          onClick={() => handleDateClick(day)}
-                          className={`min-h-[80px] sm:min-h-[110px] p-1 sm:p-2 border rounded-xl flex flex-col justify-between transition cursor-pointer hover:shadow-md ${
-                            isToday ? 'border-emerald-600 bg-emerald-50/30' : 'border-stone-200 bg-white'
-                          } ${isUserReserved ? 'ring-2 ring-emerald-500 ring-offset-1' : ''}`}
-                        >
-                          <div className="flex justify-between items-center">
-                            <span className={`text-xs sm:text-sm font-bold ${
-                              day.getDay() === 0 ? 'text-red-500' : day.getDay() === 6 ? 'text-blue-500' : 'text-stone-700'
-                            }`}>
-                              {day.getDate()}
-                            </span>
-                            {isToday && (
-                              <span className="bg-emerald-600 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">今日</span>
-                            )}
-                          </div>
-
-                          {/* その日の予約をバッジ表示 */}
-                          <div className="mt-1 space-y-1 overflow-y-auto max-h-[50px] sm:max-h-[70px] custom-scrollbar">
-                            {dayReservations.map(res => {
-                              const siteInfo = SITE_TYPES.find(s => s.id === res.siteType);
-                              const isOwn = res.userId === user?.uid;
-                              return (
-                                <div 
-                                  key={res.id} 
-                                  className={`text-[9px] sm:text-[10px] p-0.5 sm:p-1 rounded border leading-tight truncate ${
-                                    isOwn ? 'bg-emerald-700 text-white border-emerald-800' : (siteInfo?.color || 'bg-stone-100 text-stone-700')
-                                  }`}
-                                  title={`${res.userName}: ${siteInfo?.name}`}
-                                >
-                                  {isOwn ? '★マイ予約' : res.userName.substring(0, 5)}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                      <h2 className="text-sm sm:text-base font-bold text-stone-800 flex items-center gap-1.5">
+                        <span className="text-emerald-700 font-extrabold">{currentDate.getFullYear()}年</span>
+                        <span>{monthNames[currentDate.getMonth()]}</span>
+                        {calendarMode === 'weekly' && (
+                          <span className="text-xs text-stone-500 font-normal">
+                            (第{Math.ceil(currentDate.getDate() / 7)}週)
+                          </span>
+                        )}
+                      </h2>
+                      
+                      <button 
+                        onClick={() => calendarMode === 'monthly' ? changeMonth(1) : changeWeek(1)}
+                        className="px-3 py-1.5 text-stone-600 hover:bg-stone-100 rounded-lg border border-stone-200 transition text-xs font-semibold flex items-center gap-1"
+                      >
+                        {calendarMode === 'monthly' ? '来月' : '来週'} &gt;
+                      </button>
+                    </div>
+                  )}
                 </div>
 
-                {/* 凡例ガイド */}
+                {/* 1-A. 月間カレンダー */}
+                {calendarMode === 'monthly' && (
+                  <div className="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-stone-100 animate-fadeIn">
+                    <div className="grid grid-cols-7 gap-1 text-center font-bold text-stone-500 text-xs mb-2">
+                      <div className="text-red-500">日</div>
+                      <div>月</div>
+                      <div>火</div>
+                      <div>水</div>
+                      <div>木</div>
+                      <div>金</div>
+                      <div className="text-blue-500">土</div>
+                    </div>
+
+                    <div className="grid grid-cols-7 gap-1 sm:gap-2">
+                      {days.map((day, index) => {
+                        if (!day) return <div key={`empty-${index}`} className="bg-stone-50/50 rounded-lg min-h-[80px] sm:min-h-[110px]" />;
+                        
+                        const formatted = formatDateString(day);
+                        const dayReservations = reservations.filter(r => r.date === formatted);
+                        const isUserReserved = dayReservations.some(r => r.userId === user?.uid);
+                        const isToday = formatDateString(new Date()) === formatted;
+
+                        return (
+                          <div
+                            key={formatted}
+                            onClick={() => handleDateClick(day)}
+                            className={`min-h-[80px] sm:min-h-[110px] p-1 sm:p-2 border rounded-xl flex flex-col justify-between transition cursor-pointer hover:shadow-md ${
+                              isToday ? 'border-emerald-600 bg-emerald-50/30' : 'border-stone-200 bg-white'
+                            } ${isUserReserved ? 'ring-2 ring-emerald-500 ring-offset-1' : ''}`}
+                          >
+                            <div className="flex justify-between items-center">
+                              <span className={`text-xs sm:text-sm font-bold ${
+                                day.getDay() === 0 ? 'text-red-500' : day.getDay() === 6 ? 'text-blue-500' : 'text-stone-700'
+                              }`}>
+                                {day.getDate()}
+                              </span>
+                              {isToday && (
+                                <span className="bg-emerald-600 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">今日</span>
+                              )}
+                            </div>
+
+                            <div className="mt-1 space-y-1 overflow-y-auto max-h-[50px] sm:max-h-[70px] custom-scrollbar">
+                              {dayReservations.map(res => {
+                                const siteInfo = SITE_TYPES.find(s => s.id === res.siteType);
+                                const isOwn = res.userId === user?.uid;
+                                return (
+                                  <div 
+                                    key={res.id} 
+                                    className={`text-[9px] sm:text-[10px] p-0.5 sm:p-1 rounded border leading-tight truncate ${
+                                      isOwn ? 'bg-emerald-700 text-white border-emerald-800' : (siteInfo?.color || 'bg-stone-100 text-stone-700')
+                                    }`}
+                                    title={`${res.userName}: ${siteInfo?.name}`}
+                                  >
+                                    {isOwn ? '★マイ予約' : res.userName.substring(0, 5)}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* 1-B. 週間タイムライン */}
+                {calendarMode === 'weekly' && (
+                  <div className="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-stone-100 animate-fadeIn space-y-4">
+                    <p className="text-xs text-stone-500 font-medium">週間の予約をサイト（区画）別にマトリクスで確認できます。日付部分をタップすると予約できます。</p>
+                    
+                    <div className="overflow-x-auto custom-scrollbar border border-stone-100 rounded-xl">
+                      <table className="w-full border-collapse min-w-[700px]">
+                        <thead>
+                          <tr className="bg-stone-50 border-b border-stone-100">
+                            <th className="p-3 text-left text-xs font-bold text-stone-600 border-r border-stone-100 w-44">区画名</th>
+                            {weekDays.map((day) => {
+                              const formatted = formatDateString(day);
+                              const isToday = formatDateString(new Date()) === formatted;
+                              return (
+                                <th 
+                                  key={formatted} 
+                                  onClick={() => handleDateClick(day)}
+                                  className={`p-3 text-center border-r border-stone-100 hover:bg-stone-100/50 cursor-pointer transition ${
+                                    isToday ? 'bg-emerald-50/50' : ''
+                                  }`}
+                                >
+                                  <div className="text-xs text-stone-500">{weekNames[day.getDay()]}</div>
+                                  <div className={`text-base font-bold ${
+                                    day.getDay() === 0 ? 'text-red-500' : day.getDay() === 6 ? 'text-blue-500' : 'text-stone-800'
+                                  }`}>
+                                    {day.getDate()}
+                                  </div>
+                                </th>
+                              );
+                            })}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {SITE_TYPES.map((site) => (
+                            <tr key={site.id} className="border-b border-stone-100 hover:bg-stone-50/20 transition">
+                              <td className="p-3 text-xs font-bold text-stone-700 border-r border-stone-100 flex flex-col gap-1 h-20 justify-center">
+                                <span className="truncate">{site.name}</span>
+                                <span className="inline-block w-3 h-3 rounded border" className={site.color.split(' ')[0]}></span>
+                              </td>
+                              
+                              {weekDays.map((day) => {
+                                const formatted = formatDateString(day);
+                                const dayRes = reservations.find(r => r.date === formatted && r.siteType === site.id);
+                                const isOwn = dayRes?.userId === user?.uid;
+                                
+                                return (
+                                  <td 
+                                    key={`${site.id}-${formatted}`}
+                                    onClick={() => handleDateClick(day)}
+                                    className="p-1 text-center border-r border-stone-100 cursor-pointer h-20 align-middle hover:bg-emerald-50/10 transition"
+                                  >
+                                    {dayRes ? (
+                                      <div className={`text-xs p-2 rounded-lg border flex flex-col justify-center items-center h-full ${
+                                        isOwn ? 'bg-emerald-800 text-white border-emerald-950 shadow-sm' : site.color
+                                      }`}>
+                                        <span className="font-bold truncate max-w-[80px]">{isOwn ? '★マイ予約' : dayRes.userName}</span>
+                                        <span className="text-[10px] opacity-90">{dayRes.guestCount}名・{dayRes.nights}泊</span>
+                                      </div>
+                                    ) : (
+                                      <div className="text-[11px] text-stone-300 hover:text-emerald-700 flex items-center justify-center h-full border border-dashed border-stone-100 rounded-lg hover:border-emerald-300 transition">
+                                        空き
+                                      </div>
+                                    )}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* 1-C. 予約リストアジェンダ表示 */}
+                {calendarMode === 'list' && (
+                  <div className="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-stone-100 animate-fadeIn space-y-6">
+                    <div className="flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between border-b border-stone-100 pb-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-stone-500">フィルタ:</span>
+                        <button
+                          onClick={() => setListFilter('all')}
+                          className={`px-3 py-1 rounded-full text-xs font-bold transition ${
+                            listFilter === 'all' ? 'bg-emerald-800 text-white shadow-sm' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                          }`}
+                        >
+                          すべての予約 ({reservations.length})
+                        </button>
+                        <button
+                          onClick={() => setListFilter('mine')}
+                          className={`px-3 py-1 rounded-full text-xs font-bold transition ${
+                            listFilter === 'mine' ? 'bg-emerald-800 text-white shadow-sm' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                          }`}
+                        >
+                          自分の予約 ({reservations.filter(r => r.userId === user?.uid).length})
+                        </button>
+                      </div>
+
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder="名前やご要望から検索..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="w-full md:w-64 px-4 py-1.5 pl-9 border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-xs transition"
+                        />
+                        <svg className="w-4 h-4 text-stone-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4 max-h-[500px] overflow-y-auto custom-scrollbar pr-1">
+                      {(() => {
+                        let filtered = reservations;
+                        if (listFilter === 'mine') {
+                          filtered = filtered.filter(r => r.userId === user?.uid);
+                        }
+                        if (searchTerm.trim() !== '') {
+                          const query = searchTerm.toLowerCase();
+                          filtered = filtered.filter(r => 
+                            r.userName.toLowerCase().includes(query) || 
+                            (r.memo && r.memo.toLowerCase().includes(query))
+                          );
+                        }
+
+                        filtered = [...filtered].sort((a, b) => a.date.localeCompare(b.date));
+
+                        if (filtered.length === 0) {
+                          return (
+                            <div className="text-center py-12 text-stone-400 border border-dashed border-stone-200 rounded-2xl">
+                              <p className="text-sm">条件にマッチするキャンプ予約が見つかりませんでした。</p>
+                            </div>
+                          );
+                        }
+
+                        return filtered.map((res) => {
+                          const siteInfo = SITE_TYPES.find(s => s.id === res.siteType);
+                          const isOwn = res.userId === user?.uid;
+                          const resDate = new Date(res.date);
+
+                          return (
+                            <div 
+                              key={res.id} 
+                              onClick={() => handleDateClick(resDate)}
+                              className={`p-4 rounded-xl border transition-all cursor-pointer hover:shadow-md flex flex-col md:flex-row justify-between items-start md:items-center gap-4 ${
+                                isOwn ? 'border-emerald-200 bg-emerald-50/10' : 'border-stone-200 bg-white'
+                              }`}
+                            >
+                              <div className="flex items-center gap-4">
+                                <div className="p-3 bg-stone-100 rounded-xl text-center min-w-[70px]">
+                                  <div className="text-[10px] text-stone-500 font-semibold">{weekNames[resDate.getDay()]}曜日</div>
+                                  <div className="text-lg font-extrabold text-stone-800 leading-none mt-0.5">{resDate.getDate()}</div>
+                                  <div className="text-[9px] text-stone-400 mt-0.5">{resDate.getMonth() + 1}月</div>
+                                </div>
+
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-sm text-stone-800">{res.userName}</span>
+                                    {isOwn && (
+                                      <span className="bg-emerald-800 text-white text-[9px] px-2 py-0.5 rounded-full font-bold">マイ予約</span>
+                                    )}
+                                    <span className={`text-[10px] px-2.5 py-0.5 rounded border font-semibold ${siteInfo?.color || 'bg-stone-100'}`}>
+                                      {siteInfo?.name || '不明な区画'}
+                                    </span>
+                                  </div>
+                                  <div className="text-xs text-stone-500">
+                                    宿泊数: <span className="font-semibold text-stone-700">{res.nights}泊</span> | 
+                                    人数: <span className="font-semibold text-stone-700">{res.guestCount}名</span>
+                                  </div>
+                                  {res.memo && (
+                                    <p className="text-xs text-stone-400 italic">「{res.memo}」</p>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="text-xs text-emerald-800 font-bold hover:underline self-end md:self-auto flex items-center gap-1">
+                                <span>詳細の確認・変更</span>
+                                <span>&rarr;</span>
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </div>
+                )}
+
+                {/* 凡例 */}
                 <div className="bg-stone-100 p-4 rounded-xl border border-stone-200 flex flex-wrap gap-4 items-center justify-between text-sm">
                   <div className="flex flex-wrap gap-3">
                     <span className="font-bold text-stone-700">区画カラー：</span>
@@ -830,12 +1309,340 @@
                       </span>
                     ))}
                   </div>
-                  <p className="text-xs text-stone-500">※ご希望の日付をタップすると、予約の作成・変更が可能です。</p>
                 </div>
               </div>
             )}
 
-            {/* 2. メンバープロフィール登録・SNS連携 タブ */}
+            {/* 2. イベント・SNSタイムライン タブ */}
+            {activeTab === 'events' && (
+              <div className="max-w-3xl mx-auto space-y-6">
+                
+                {/* 告知イベントの上部ヘッダー & 作成ボタン */}
+                <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div>
+                    <h2 className="text-xl font-bold text-emerald-950 flex items-center gap-2">
+                      <Icons.Megaphone />
+                      <span>キャンパーイベント＆告知</span>
+                    </h2>
+                    <p className="text-xs text-emerald-800 mt-1">「みんなで焚き火したい！」「オフ会を企画したい！」あなたのイベントを告知しましょう。</p>
+                  </div>
+                  <button
+                    onClick={() => setShowEventCreate(!showEventCreate)}
+                    className="px-4 py-2.5 bg-emerald-800 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-sm transition"
+                  >
+                    <Icons.Plus />
+                    <span>イベントを企画する</span>
+                  </button>
+                </div>
+
+                {/* 新規イベント投稿フォームパネル */}
+                {showEventCreate && (
+                  <form onSubmit={handleCreateEvent} className="bg-white p-6 rounded-2xl border border-stone-200 shadow-md space-y-4 animate-fadeIn">
+                    <h3 className="font-bold text-stone-800 border-b pb-2">✏️ イベント告知の作成</h3>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-stone-500 mb-1">イベントタイトル</label>
+                        <input
+                          type="text"
+                          required
+                          value={newEventForm.title}
+                          onChange={(e) => setNewEventForm({ ...newEventForm, title: e.target.value })}
+                          placeholder="例：週末に薪割りオフ会やりませんか？"
+                          className="w-full px-3 py-2 text-sm border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-stone-500 mb-1">開催日時 (目安)</label>
+                        <input
+                          type="date"
+                          required
+                          value={newEventForm.date}
+                          onChange={(e) => setNewEventForm({ ...newEventForm, date: e.target.value })}
+                          className="w-full px-3 py-2 text-sm border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-stone-500 mb-1">カテゴリ</label>
+                      <select
+                        value={newEventForm.category}
+                        onChange={(e) => setNewEventForm({ ...newEventForm, category: e.target.value })}
+                        className="w-full px-3 py-2 text-sm border border-stone-200 bg-white rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                      >
+                        <option value="昆虫採集">🌳 昆虫採集・自然観察</option>
+                        <option value="薪割り・焚き火">🔥 薪割り・焚き火</option>
+                        <option value="オフ会・交流">👥 オフ会・交流</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-stone-500 mb-1">詳細内容（持ち物や集合場所など）</label>
+                      <textarea
+                        required
+                        rows="4"
+                        value={newEventForm.description}
+                        onChange={(e) => setNewEventForm({ ...newEventForm, description: e.target.value })}
+                        placeholder="例：どなたでもお気軽にご参加ください！持ち物は特に必要ありませんが、自慢のギアがあればお持ちください。"
+                        className="w-full px-3 py-2 text-sm border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none resize-none"
+                      />
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowEventCreate(false)}
+                        className="px-4 py-2 text-xs font-bold bg-stone-100 hover:bg-stone-200 text-stone-600 rounded-lg"
+                      >
+                        キャンセル
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-5 py-2 text-xs font-bold bg-emerald-800 hover:bg-emerald-700 text-white rounded-lg"
+                      >
+                        投稿・告知する
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {/* SNS風イベントフィードリスト */}
+                <div className="space-y-6">
+                  {eventsList.length === 0 ? (
+                    <div className="text-center py-16 bg-white rounded-2xl border border-stone-100 text-stone-400">
+                      <p className="text-sm">現在企画されているイベントはありません。</p>
+                      <p className="text-xs mt-1">「イベントを企画する」から一番最初の提案をしてみましょう！</p>
+                    </div>
+                  ) : (
+                    eventsList.map((ev) => {
+                      const isLiked = ev.likes?.includes(user.uid);
+                      const isParticipant = ev.participants?.some(p => p.userId === user.uid);
+                      const isCreator = ev.creatorId === user.uid;
+
+                      return (
+                        <div key={ev.id} className="bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden animate-fadeIn">
+                          
+                          {/* イベントカード上部 (作成者＆カテゴリバッジ) */}
+                          <div className="p-5 pb-3 flex justify-between items-start">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-10 h-10 rounded-full ${ev.avatarColor || 'bg-emerald-600'} flex items-center justify-center font-bold text-white text-sm`}>
+                                {(ev.creatorName || 'C').charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-stone-800">{ev.creatorName}</p>
+                                <p className="text-[10px] text-stone-400">イベント主催者</p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <span className="bg-amber-100 text-amber-800 text-[10px] px-2.5 py-1 rounded-full font-bold">
+                                {ev.category}
+                              </span>
+                              {isCreator && (
+                                <button
+                                  onClick={() => handleDeleteEvent(ev.id)}
+                                  className="p-1 hover:bg-red-50 text-red-500 rounded-lg transition"
+                                  title="削除"
+                                >
+                                  <Icons.Trash />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* 本文エリア */}
+                          <div className="px-5 pb-4 space-y-3">
+                            <h3 className="text-base sm:text-lg font-extrabold text-stone-950 leading-tight">
+                              {ev.title}
+                            </h3>
+                            
+                            <div className="bg-stone-50 border border-stone-100 p-3 rounded-xl flex items-center gap-2 text-xs text-stone-600 font-semibold">
+                              <span className="text-emerald-800 font-extrabold">📅 開催予定日：</span>
+                              <span>{ev.date}</span>
+                            </div>
+
+                            <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">
+                              {ev.description}
+                            </p>
+                          </div>
+
+                          {/* 参加表明アバターリスト & いいね/参加表明 SNSアクション */}
+                          <div className="px-5 py-3.5 bg-stone-50/50 border-t border-b border-stone-100 flex flex-wrap justify-between items-center gap-4">
+                            
+                            {/* 参加キャンパーアバター重ね表示 */}
+                            <div className="flex items-center gap-2">
+                              <div className="flex -space-x-2">
+                                {(ev.participants || []).slice(0, 5).map((p, idx) => (
+                                  <div 
+                                    key={idx} 
+                                    className={`w-7 h-7 rounded-full ${p.avatarColor || 'bg-stone-400'} border-2 border-white flex items-center justify-center text-[10px] font-bold text-white shadow-sm`}
+                                    title={p.userName}
+                                  >
+                                    {p.userName.charAt(0).toUpperCase()}
+                                  </div>
+                                ))}
+                                {ev.participants?.length > 5 && (
+                                  <div className="w-7 h-7 rounded-full bg-stone-300 border-2 border-white flex items-center justify-center text-[9px] font-bold text-stone-700">
+                                    +{ev.participants.length - 5}
+                                  </div>
+                                )}
+                              </div>
+                              <span className="text-xs text-stone-500 font-semibold">
+                                {ev.participants?.length || 0} 名が「参加表明」しています
+                              </span>
+                            </div>
+
+                            {/* インタラクティブアクションボタン */}
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleToggleLike(ev.id)}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition ${
+                                  isLiked 
+                                    ? 'bg-red-50 border-red-200 text-red-600' 
+                                    : 'bg-white border-stone-200 text-stone-600 hover:bg-stone-100'
+                                }`}
+                              >
+                                <Icons.Heart filled={isLiked} />
+                                <span>{ev.likes?.length || 0}</span>
+                              </button>
+
+                              <button
+                                onClick={() => handleToggleParticipant(ev.id)}
+                                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-extrabold transition shadow-sm ${
+                                  isParticipant
+                                    ? 'bg-emerald-800 hover:bg-emerald-700 text-white'
+                                    : 'bg-white border border-emerald-600 text-emerald-800 hover:bg-emerald-50/50'
+                                }`}
+                              >
+                                {isParticipant ? '✓ 参加予定' : '👥 参加表明する'}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* コメントセクション */}
+                          <div className="p-5 bg-stone-50/20 space-y-4">
+                            <h4 className="text-xs font-bold text-stone-500 tracking-wider">💬 コメントやり取り</h4>
+
+                            {/* 既存コメント一覧 */}
+                            <div className="space-y-3">
+                              {(ev.comments || []).map((comm) => (
+                                <div key={comm.id} className="text-xs bg-white p-3 rounded-xl border border-stone-100 flex flex-col gap-1 shadow-sm">
+                                  <div className="flex justify-between items-center">
+                                    <span className="font-bold text-stone-800">{comm.userName}</span>
+                                    <span className="text-[9px] text-stone-400">
+                                      {comm.createdAt ? new Date(comm.createdAt).toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}
+                                    </span>
+                                  </div>
+                                  <p className="text-stone-700 leading-relaxed whitespace-pre-wrap">{comm.text}</p>
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* コメント追加フォーム */}
+                            <div className="flex gap-2 pt-1">
+                              <input
+                                type="text"
+                                placeholder="質問や意気込み、待ち合わせの確認など..."
+                                value={eventComments[ev.id] || ''}
+                                onChange={(e) => setEventComments({ ...eventComments, [ev.id]: e.target.value })}
+                                className="flex-1 px-3 py-1.5 text-xs border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition bg-white"
+                              />
+                              <button
+                                onClick={() => handleAddComment(ev.id)}
+                                className="px-4 py-1.5 bg-stone-800 text-white rounded-xl text-xs font-bold hover:bg-stone-700 transition"
+                              >
+                                送信
+                              </button>
+                            </div>
+                          </div>
+
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+              </div>
+            )}
+
+            {/* 3. 焚き火チャット タブ */}
+            {activeTab === 'chat' && (
+              <div className="bg-white rounded-2xl shadow-sm border border-stone-100 flex flex-col h-[calc(100vh-280px)] min-h-[450px]">
+                {/* チャットヘッダー */}
+                <div className="bg-emerald-50 p-4 rounded-t-2xl border-b border-stone-100 flex justify-between items-center">
+                  <div>
+                    <h3 className="font-bold text-emerald-950 flex items-center gap-2 text-base">
+                      <span>🔥 キャンプコミュニティチャット</span>
+                    </h3>
+                    <p className="text-xs text-emerald-700">キャンプ場の情報交換や雑談、現地からの実況にどうぞ！</p>
+                  </div>
+                  <span className="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-bold">
+                    {chatMessages.length} 件のログ
+                  </span>
+                </div>
+
+                {/* メッセージ表示エリア */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-amber-50/10">
+                  {chatMessages.length === 0 ? (
+                    <div className="text-center py-12 text-stone-400">
+                      <p>まだメッセージはありません。</p>
+                      <p className="text-xs mt-1">最初のメッセージを投稿してみましょう！</p>
+                    </div>
+                  ) : (
+                    chatMessages.map((msg) => {
+                      const isOwn = msg.userId === user?.uid;
+                      return (
+                        <div key={msg.id} className={`flex items-start gap-3 ${isOwn ? 'flex-row-reverse' : ''}`}>
+                          <div className={`w-9 h-9 rounded-full ${msg.avatarColor || 'bg-emerald-600'} flex items-center justify-center text-white font-bold text-sm shadow-sm flex-shrink-0`}>
+                            {msg.userName.charAt(0).toUpperCase()}
+                          </div>
+                          
+                          <div className={`flex flex-col max-w-[70%] ${isOwn ? 'items-end' : 'items-start'}`}>
+                            <span className="text-xs font-semibold text-stone-500 mb-1 px-1">
+                              {msg.userName} {isOwn && <span className="text-[10px] text-emerald-600">(あなた)</span>}
+                            </span>
+                            
+                            <div className={`p-3 rounded-2xl text-sm leading-relaxed shadow-sm ${
+                              isOwn 
+                                ? 'bg-emerald-800 text-white rounded-tr-none' 
+                                : 'bg-stone-100 text-stone-800 rounded-tl-none'
+                            }`}>
+                              <p className="whitespace-pre-wrap break-all">{msg.message}</p>
+                            </div>
+                            
+                            <span className="text-[9px] text-stone-400 mt-1 px-1">
+                              {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
+
+                {/* 送信フォーム */}
+                <form onSubmit={handleSendMessage} className="p-4 border-t border-stone-100 flex gap-2 bg-white rounded-b-2xl">
+                  <input
+                    type="text"
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    placeholder="メッセージを入力してください..."
+                    className="flex-1 px-4 py-2.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition text-sm"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!newMessage.trim()}
+                    className="px-6 py-2.5 bg-emerald-800 text-white font-bold rounded-xl hover:bg-emerald-700 disabled:bg-stone-200 disabled:text-stone-400 transition"
+                  >
+                    送信
+                  </button>
+                </form>
+              </div>
+            )}
+
+            {/* 4. メンバープロフィール登録・SNS連携 タブ */}
             {activeTab === 'profile' && (
               <div className="max-w-2xl mx-auto space-y-6">
                 
@@ -969,83 +1776,7 @@
               </div>
             )}
 
-            {/* 3. 焚き火チャット タブ */}
-            {activeTab === 'chat' && (
-              <div className="bg-white rounded-2xl shadow-sm border border-stone-100 flex flex-col h-[calc(100vh-280px)] min-h-[450px]">
-                {/* チャットヘッダー */}
-                <div className="bg-emerald-50 p-4 rounded-t-2xl border-b border-stone-100 flex justify-between items-center">
-                  <div>
-                    <h3 className="font-bold text-emerald-950 flex items-center gap-2 text-base">
-                      <span>🔥 キャンプコミュニティチャット</span>
-                    </h3>
-                    <p className="text-xs text-emerald-700">キャンプ場の情報交換や雑談、現地からの実況にどうぞ！</p>
-                  </div>
-                  <span className="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-bold">
-                    {chatMessages.length} 件のログ
-                  </span>
-                </div>
-
-                {/* メッセージ表示エリア */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-amber-50/10">
-                  {chatMessages.length === 0 ? (
-                    <div className="text-center py-12 text-stone-400">
-                      <p>まだメッセージはありません。</p>
-                      <p className="text-xs mt-1">最初のメッセージを投稿してみましょう！</p>
-                    </div>
-                  ) : (
-                    chatMessages.map((msg) => {
-                      const isOwn = msg.userId === user?.uid;
-                      return (
-                        <div key={msg.id} className={`flex items-start gap-3 ${isOwn ? 'flex-row-reverse' : ''}`}>
-                          <div className={`w-9 h-9 rounded-full ${msg.avatarColor || 'bg-emerald-600'} flex items-center justify-center text-white font-bold text-sm shadow-sm flex-shrink-0`}>
-                            {msg.userName.charAt(0).toUpperCase()}
-                          </div>
-                          
-                          <div className={`flex flex-col max-w-[70%] ${isOwn ? 'items-end' : 'items-start'}`}>
-                            <span className="text-xs font-semibold text-stone-500 mb-1 px-1">
-                              {msg.userName} {isOwn && <span className="text-[10px] text-emerald-600">(あなた)</span>}
-                            </span>
-                            
-                            <div className={`p-3 rounded-2xl text-sm leading-relaxed shadow-sm ${
-                              isOwn 
-                                ? 'bg-emerald-800 text-white rounded-tr-none' 
-                                : 'bg-stone-100 text-stone-800 rounded-tl-none'
-                            }`}>
-                              <p className="whitespace-pre-wrap break-all">{msg.message}</p>
-                            </div>
-                            
-                            <span className="text-[9px] text-stone-400 mt-1 px-1">
-                              {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                  <div ref={chatEndRef} />
-                </div>
-
-                {/* 送信フォーム */}
-                <form onSubmit={handleSendMessage} className="p-4 border-t border-stone-100 flex gap-2 bg-white rounded-b-2xl">
-                  <input
-                    type="text"
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder="メッセージを入力してください..."
-                    className="flex-1 px-4 py-2.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition text-sm"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!newMessage.trim()}
-                    className="px-6 py-2.5 bg-emerald-800 text-white font-bold rounded-xl hover:bg-emerald-700 disabled:bg-stone-200 disabled:text-stone-400 transition"
-                  >
-                    送信
-                  </button>
-                </form>
-              </div>
-            )}
-
-            {/* 4. キャンプ場ガイド タブ */}
+            {/* 5. キャンプ場ガイド タブ */}
             {activeTab === 'guide' && (
               <div className="space-y-6">
                 <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-stone-100">
@@ -1252,5 +1983,4 @@
     root.render(<App />);
   </script>
 </body>
-</html>
 </html>

@@ -189,6 +189,10 @@
         googleEmail: ''
       });
       
+      const [isAdmin, setIsAdmin] = useState(false);
+      const [showAdminModal, setShowAdminModal] = useState(false);
+      const [adminPasswordInput, setAdminPasswordInput] = useState('');
+
       const [reservations, setReservations] = useState([]);
       const [chatMessages, setChatMessages] = useState([]);
       const [eventsList, setEventsList] = useState([]);
@@ -251,6 +255,41 @@
             setConfirmModal(prev => ({ ...prev, isOpen: false }));
           }
         });
+      };
+
+      const handleAdminLoginSubmit = (e) => {
+        e.preventDefault();
+        if (adminPasswordInput === 'admin123') {
+          setIsAdmin(true);
+          setShowAdminModal(false);
+          setAdminPasswordInput('');
+          showAlert("👑 管理者モードでログインしました。全予約の強制変更・チャット削除が可能です。", "success");
+        } else {
+          showAlert("パスワードが違います（デモ用は admin123 です）", "error");
+        }
+      };
+
+      const handleAdminLogout = () => {
+        setIsAdmin(false);
+        showAlert("管理者モードを終了しました。", "info");
+      };
+
+      const handleDeleteChatMessage = (chatId) => {
+        showConfirm(
+          "メッセージの強制削除",
+          "管理者権限でこのメッセージを削除しますか？",
+          () => {
+            if (isDemo) {
+              const currentChats = getLocalData('chat_messages', []);
+              setLocalData('chat_messages', currentChats.filter(c => c.id !== chatId));
+              showAlert("メッセージを削除しました。", "success");
+            } else {
+              dbObj.collection('artifacts').doc(currentAppId).collection('public').doc('data').collection('chat_messages').doc(chatId).delete()
+                .then(() => showAlert("メッセージを削除しました。", "success"))
+                .catch(() => showAlert("削除に失敗しました。", "error"));
+            }
+          }
+        );
       };
 
       // 1. 認証処理
@@ -569,9 +608,12 @@
           return;
         }
 
+        // 管理者が他人の予約を変更した場合は、元のユーザー名とIDを継承する
+        const targetRes = reservationForm.id ? reservations.find(r => r.id === reservationForm.id) : null;
+
         const reservationPayload = {
-          userId: user.uid,
-          userName: profile.nickname || '名無しキャンパー',
+          userId: targetRes ? targetRes.userId : user.uid,
+          userName: targetRes ? targetRes.userName : (profile.nickname || '名無しキャンパー'),
           date: selectedDate,
           siteType: reservationForm.siteType,
           nights: Number(reservationForm.nights),
@@ -630,11 +672,15 @@
         e.preventDefault();
         if (!newEventForm.title || !newEventForm.date || !newEventForm.description) return;
 
+        // 管理者モード中は、公式名義でイベント投稿可能
+        const creatorName = isAdmin ? "管理人のひろき" : (profile.nickname || '名無しキャンパー');
+        const avatarColor = isAdmin ? "bg-emerald-950" : (profile.avatarColor || 'bg-emerald-600');
+
         const eventPayload = {
           id: 'ev_' + Date.now(),
           creatorId: user.uid,
-          creatorName: profile.nickname || '名無しキャンパー',
-          avatarColor: profile.avatarColor || 'bg-emerald-600',
+          creatorName: creatorName,
+          avatarColor: avatarColor,
           title: newEventForm.title,
           date: newEventForm.date,
           category: newEventForm.category,
@@ -815,7 +861,8 @@
         const formatted = formatDateString(date);
         setSelectedDate(formatted);
         
-        const existing = reservations.find(r => r.date === formatted && r.userId === user?.uid);
+        // 管理者なら誰の予約でも対象（初めのヒット）、一般は自分の予約のみ
+        const existing = reservations.find(r => r.date === formatted && (isAdmin ? true : r.userId === user?.uid));
         
         if (existing) {
           setReservationForm({
@@ -844,6 +891,7 @@
           {isDemo && (
             <div className="bg-amber-500 text-stone-900 text-center py-1.5 px-4 text-xs font-semibold shadow-sm flex items-center justify-center gap-2">
               <span>💡 現在ローカルシミュレーション（デモモード）で動作中。データはブラウザのLocalStorageに保存されます。</span>
+              {isAdmin && <span className="bg-red-600 text-white px-2 py-0.5 rounded font-black text-[10px]">ADMIN MODE ACTIVE</span>}
             </div>
           )}
 
@@ -888,6 +936,49 @@
             </div>
           )}
 
+          {}
+          {showAdminModal && (
+            <div className="fixed inset-0 z-50 bg-stone-900/60 flex items-center justify-center p-4 backdrop-blur-sm">
+              <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl border border-stone-200 animate-fadeIn">
+                <div className="bg-stone-900 text-white p-4 flex justify-between items-center">
+                  <span className="font-extrabold text-sm tracking-wider">👑 管理者認証ログイン</span>
+                  <button onClick={() => setShowAdminModal(false)} className="text-stone-400 hover:text-white">✕</button>
+                </div>
+                <form onSubmit={handleAdminLoginSubmit} className="p-5 space-y-4">
+                  <p className="text-xs text-stone-500 leading-relaxed">
+                    管理者専用パスワードを入力してください。<br/>
+                    <strong className="text-amber-600">※デモ用パスワード: admin123</strong>
+                  </p>
+                  <div>
+                    <input
+                      type="password"
+                      required
+                      placeholder="パスワードを入力"
+                      value={adminPasswordInput}
+                      onChange={(e) => setAdminPasswordInput(e.target.value)}
+                      className="w-full px-4 py-2 text-sm border border-stone-200 rounded-xl focus:ring-2 focus:ring-stone-800 outline-none"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowAdminModal(false)}
+                      className="px-3 py-1.5 text-xs font-bold text-stone-500 hover:bg-stone-100 rounded-lg"
+                    >
+                      閉じる
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-1.5 text-xs font-bold bg-stone-900 hover:bg-stone-800 text-white rounded-lg shadow"
+                    >
+                      ログインする
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
           {/* ヘッダー */}
           <header className="bg-emerald-900 text-white shadow-md">
             <div className="max-w-6xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
@@ -902,15 +993,15 @@
               </div>
               
               <div className="flex items-center gap-3 bg-emerald-800/80 px-4 py-2 rounded-full border border-emerald-700">
-                <div className={`w-8 h-8 rounded-full ${profile.avatarColor || 'bg-emerald-600'} flex items-center justify-center font-bold text-white text-sm`}>
-                  {(profile.nickname || 'G').charAt(0).toUpperCase()}
+                <div className={`w-8 h-8 rounded-full ${isAdmin ? 'bg-stone-900' : (profile.avatarColor || 'bg-emerald-600')} flex items-center justify-center font-bold text-white text-sm`}>
+                  {isAdmin ? '👑' : (profile.nickname || 'G').charAt(0).toUpperCase()}
                 </div>
                 <div className="text-left">
                   <div className="text-xs text-emerald-300">
-                    {profile.googleLinked ? "Google連携中" : "一時ゲスト"}
+                    {isAdmin ? "👑 システム管理者" : (profile.googleLinked ? "Google連携中" : "一時ゲスト")}
                   </div>
                   <div className="text-sm font-medium leading-tight truncate max-w-[120px]">
-                    {profile.nickname || 'ゲスト'}
+                    {isAdmin ? "管理者ひろき" : (profile.nickname || 'ゲスト')}
                   </div>
                 </div>
               </div>
@@ -1065,7 +1156,8 @@
                         
                         const formatted = formatDateString(day);
                         const dayReservations = reservations.filter(r => r.date === formatted);
-                        const isUserReserved = dayReservations.some(r => r.userId === user?.uid);
+                        // 管理者なら全予約を自分の予約のようにハンドリング・編集可能
+                        const isUserReserved = dayReservations.some(r => r.userId === user?.uid) || (isAdmin && dayReservations.length > 0);
                         const isToday = formatDateString(new Date()) === formatted;
 
                         return (
@@ -1099,7 +1191,7 @@
                                     }`}
                                     title={`${res.userName}: ${siteInfo?.name}`}
                                   >
-                                    {isOwn ? '★マイ予約' : res.userName.substring(0, 5)}
+                                    {isOwn ? '★マイ予約' : (isAdmin ? `👑 ${res.userName}` : res.userName.substring(0, 5))}
                                   </div>
                                 );
                               })}
@@ -1148,7 +1240,7 @@
                             <tr key={site.id} className="border-b border-stone-100 hover:bg-stone-50/20 transition">
                               <td className="p-3 text-xs font-bold text-stone-700 border-r border-stone-100 flex flex-col gap-1 h-20 justify-center">
                                 <span className="truncate">{site.name}</span>
-                                <span className="inline-block w-3 h-3 rounded border" className={site.color.split(' ')[0]}></span>
+                                <span className={`inline-block w-3 h-3 rounded border ${site.color.split(' ')[0]}`}></span>
                               </td>
                               
                               {weekDays.map((day) => {
@@ -1164,9 +1256,9 @@
                                   >
                                     {dayRes ? (
                                       <div className={`text-xs p-2 rounded-lg border flex flex-col justify-center items-center h-full ${
-                                        isOwn ? 'bg-emerald-800 text-white border-emerald-950 shadow-sm' : site.color
+                                        isOwn ? 'bg-emerald-800 text-white border-emerald-950 shadow-sm' : (isAdmin ? 'bg-stone-900 text-stone-100 border-stone-950 shadow-sm' : site.color)
                                       }`}>
-                                        <span className="font-bold truncate max-w-[80px]">{isOwn ? '★マイ予約' : dayRes.userName}</span>
+                                        <span className="font-bold truncate max-w-[80px]">{isOwn ? '★マイ予約' : (isAdmin ? `👑 ${dayRes.userName}` : dayRes.userName)}</span>
                                         <span className="text-[10px] opacity-90">{dayRes.guestCount}名・{dayRes.nights}泊</span>
                                       </div>
                                     ) : (
@@ -1205,7 +1297,7 @@
                             listFilter === 'mine' ? 'bg-emerald-800 text-white shadow-sm' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
                           }`}
                         >
-                          自分の予約 ({reservations.filter(r => r.userId === user?.uid).length})
+                          {isAdmin ? "管理者操作可能リスト" : "自分の予約"} ({reservations.filter(r => isAdmin ? true : r.userId === user?.uid).length})
                         </button>
                       </div>
 
@@ -1249,7 +1341,7 @@
 
                         return filtered.map((res) => {
                           const siteInfo = SITE_TYPES.find(s => s.id === res.siteType);
-                          const isOwn = res.userId === user?.uid;
+                          const isOwn = res.userId === user?.uid || isAdmin; // 管理者なら全ての変更操作を行える
                           const resDate = new Date(res.date);
 
                           return (
@@ -1257,7 +1349,7 @@
                               key={res.id} 
                               onClick={() => handleDateClick(resDate)}
                               className={`p-4 rounded-xl border transition-all cursor-pointer hover:shadow-md flex flex-col md:flex-row justify-between items-start md:items-center gap-4 ${
-                                isOwn ? 'border-emerald-200 bg-emerald-50/10' : 'border-stone-200 bg-white'
+                                res.userId === user?.uid ? 'border-emerald-200 bg-emerald-50/10' : (isAdmin ? 'border-stone-300 bg-stone-50' : 'border-stone-200 bg-white')
                               }`}
                             >
                               <div className="flex items-center gap-4">
@@ -1270,8 +1362,11 @@
                                 <div className="space-y-1">
                                   <div className="flex items-center gap-2">
                                     <span className="font-bold text-sm text-stone-800">{res.userName}</span>
-                                    {isOwn && (
+                                    {res.userId === user?.uid && (
                                       <span className="bg-emerald-800 text-white text-[9px] px-2 py-0.5 rounded-full font-bold">マイ予約</span>
+                                    )}
+                                    {isAdmin && (
+                                      <span className="bg-stone-800 text-stone-200 text-[9px] px-2 py-0.5 rounded-full font-bold">ADMIN特権編集可</span>
                                     )}
                                     <span className={`text-[10px] px-2.5 py-0.5 rounded border font-semibold ${siteInfo?.color || 'bg-stone-100'}`}>
                                       {siteInfo?.name || '不明な区画'}
@@ -1288,7 +1383,7 @@
                               </div>
 
                               <div className="text-xs text-emerald-800 font-bold hover:underline self-end md:self-auto flex items-center gap-1">
-                                <span>詳細の確認・変更</span>
+                                <span>{isOwn ? "詳細の確認・変更・強制キャンセル" : "詳細の確認"}</span>
                                 <span>&rarr;</span>
                               </div>
                             </div>
@@ -1418,7 +1513,7 @@
                     eventsList.map((ev) => {
                       const isLiked = ev.likes?.includes(user.uid);
                       const isParticipant = ev.participants?.some(p => p.userId === user.uid);
-                      const isCreator = ev.creatorId === user.uid;
+                      const isCreator = ev.creatorId === user.uid || isAdmin; // 管理者は全イベントを強制削除可能
 
                       return (
                         <div key={ev.id} className="bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden animate-fadeIn">
@@ -1430,7 +1525,12 @@
                                 {(ev.creatorName || 'C').charAt(0).toUpperCase()}
                               </div>
                               <div>
-                                <p className="text-sm font-bold text-stone-800">{ev.creatorName}</p>
+                                <p className="text-sm font-bold text-stone-800 flex items-center gap-1.5">
+                                  <span>{ev.creatorName}</span>
+                                  {ev.avatarColor === "bg-emerald-950" && (
+                                    <span className="bg-stone-900 text-white text-[9px] px-1.5 py-0.5 rounded font-extrabold">👑 公式管理人</span>
+                                  )}
+                                </p>
                                 <p className="text-[10px] text-stone-400">イベント主催者</p>
                               </div>
                             </div>
@@ -1443,7 +1543,7 @@
                                 <button
                                   onClick={() => handleDeleteEvent(ev.id)}
                                   className="p-1 hover:bg-red-50 text-red-500 rounded-lg transition"
-                                  title="削除"
+                                  title={isAdmin ? "管理者の力で削除" : "削除"}
                                 >
                                   <Icons.Trash />
                                 </button>
@@ -1599,16 +1699,30 @@
                           </div>
                           
                           <div className={`flex flex-col max-w-[70%] ${isOwn ? 'items-end' : 'items-start'}`}>
-                            <span className="text-xs font-semibold text-stone-500 mb-1 px-1">
-                              {msg.userName} {isOwn && <span className="text-[10px] text-emerald-600">(あなた)</span>}
+                            <span className="text-xs font-semibold text-stone-500 mb-1 px-1 flex items-center gap-1.5">
+                              <span>{msg.userName}</span>
+                              {isOwn && <span className="text-[10px] text-emerald-600">(あなた)</span>}
                             </span>
                             
-                            <div className={`p-3 rounded-2xl text-sm leading-relaxed shadow-sm ${
-                              isOwn 
-                                ? 'bg-emerald-800 text-white rounded-tr-none' 
-                                : 'bg-stone-100 text-stone-800 rounded-tl-none'
-                            }`}>
-                              <p className="whitespace-pre-wrap break-all">{msg.message}</p>
+                            <div className="flex items-center gap-2">
+                              {}
+                              {isAdmin && (
+                                <button 
+                                  onClick={() => handleDeleteChatMessage(msg.id)}
+                                  className="p-1 hover:bg-red-100 rounded text-red-500 order-last transition"
+                                  title="この発言を強制削除"
+                                >
+                                  <Icons.Trash />
+                                </button>
+                              )}
+                              
+                              <div className={`p-3 rounded-2xl text-sm leading-relaxed shadow-sm ${
+                                isOwn 
+                                  ? 'bg-emerald-800 text-white rounded-tr-none' 
+                                  : 'bg-stone-100 text-stone-800 rounded-tl-none'
+                              }`}>
+                                <p className="whitespace-pre-wrap break-all">{msg.message}</p>
+                              </div>
                             </div>
                             
                             <span className="text-[9px] text-stone-400 mt-1 px-1">
@@ -1623,26 +1737,7 @@
                 </div>
 
                 {/* 送信フォーム */}
-                <form onSubmit={handleSendMessage} className="p-4 border-t border-stone-100 flex gap-2 bg-white rounded-b-2xl">
-                  <input
-                    type="text"
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder="メッセージを入力してください..."
-                    className="flex-1 px-4 py-2.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition text-sm"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!newMessage.trim()}
-                    className="px-6 py-2.5 bg-emerald-800 text-white font-bold rounded-xl hover:bg-emerald-700 disabled:bg-stone-200 disabled:text-stone-400 transition"
-                  >
-                    送信
-                  </button>
-                </form>
-              </div>
-            )}
-
-            {/* 4. メンバープロフィール登録・SNS連携 タブ */}
+            {/* 2. メンバープロフィール登録・SNS連携 タブ */}
             {activeTab === 'profile' && (
               <div className="max-w-2xl mx-auto space-y-6">
                 
@@ -1688,6 +1783,31 @@
                       </button>
                     </div>
                   )}
+
+                  {}
+                  <div className="mt-6 pt-6 border-t border-stone-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <div>
+                      <p className="text-xs font-bold text-stone-600">🏕 CAMP LINK システム管理職スタッフの方</p>
+                      <p className="text-[10px] text-stone-400">管理者パスワードを入力して全情報の管理を行います。</p>
+                    </div>
+                    {isAdmin ? (
+                      <button
+                        type="button"
+                        onClick={handleAdminLogout}
+                        className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-black rounded-lg transition"
+                      >
+                        管理者モード解除
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShowAdminModal(true)}
+                        className="px-4 py-1.5 bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold rounded-lg transition"
+                      >
+                        管理者ログイン
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* プロフィール詳細フォーム */}
@@ -1937,7 +2057,8 @@
 
                   {/* アクションボタン */}
                   <div className="pt-2 flex gap-2 justify-end">
-                    {reservationForm.id && (
+                    {/* 管理者、または本人の予約であればキャンセル（削除）ボタンを表示 */}
+                    {(reservationForm.id && (reservations.find(r => r.id === reservationForm.id)?.userId === user?.uid || isAdmin)) && (
                       <button
                         type="button"
                         onClick={() => handleDeleteReservation(reservationForm.id)}

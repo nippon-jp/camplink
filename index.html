@@ -174,6 +174,14 @@
       { id: 'site', name: 'キャンプサイト', color: 'bg-emerald-100 text-emerald-800 border-emerald-300 shadow-sm' },
     ];
 
+    // デフォルトのシークレット管理者情報設定
+    const DEFAULT_ADMIN_CREDENTIALS = {
+      adminId: 'admin',
+      adminPassword: 'admin123',
+      adminName: '管理者ひろき',
+      adminAvatarColor: 'bg-stone-900'
+    };
+
     // --- ヘルパー関数群 ---
     const getDaysInMonth = (date) => {
       const year = date.getFullYear();
@@ -231,7 +239,9 @@
       
       const [isAdmin, setIsAdmin] = useState(false);
       const [showAdminModal, setShowAdminModal] = useState(false);
+      const [adminIdInput, setAdminIdInput] = useState('');
       const [adminPasswordInput, setAdminPasswordInput] = useState('');
+      const [adminCredentials, setAdminCredentials] = useState(DEFAULT_ADMIN_CREDENTIALS);
 
       const [reservations, setReservations] = useState([]);
       const [chatMessages, setChatMessages] = useState([]);
@@ -297,21 +307,36 @@
         });
       };
 
+      // 管理者ログイン時のサブミット処理
       const handleAdminLoginSubmit = (e) => {
         e.preventDefault();
-        if (adminPasswordInput === 'admin123') {
+        if (adminIdInput === adminCredentials.adminId && adminPasswordInput === adminCredentials.adminPassword) {
           setIsAdmin(true);
           setShowAdminModal(false);
+          setAdminIdInput('');
           setAdminPasswordInput('');
-          showAlert("👑 管理者モードでログインしました。全予約の強制変更・チャット削除が可能です。", "success");
+          showAlert(`👑 管理者「${adminCredentials.adminName}」としてログインしました。全権限が付与されます。`, "success");
         } else {
-          showAlert("パスワードが違います。", "error");
+          showAlert("管理者IDまたはパスワードが正しくありません。", "error");
         }
       };
 
       const handleAdminLogout = () => {
         setIsAdmin(false);
         showAlert("管理者モードを終了しました。", "info");
+      };
+
+      // 管理者自身による認証設定・プロフィールの変更保存
+      const handleUpdateAdminSettings = (e) => {
+        e.preventDefault();
+        if (isDemo) {
+          setLocalData('admin_settings', adminCredentials);
+          showAlert("管理者認証・アカウント設定を保存しました！", "success");
+        } else {
+          dbObj.collection('artifacts').doc(currentAppId).collection('public').doc('data').collection('admin_settings').doc('config').set(adminCredentials)
+            .then(() => showAlert("管理者設定をクラウド（Firestore）に同期しました！", "success"))
+            .catch(() => showAlert("管理者設定の保存に失敗しました。", "error"));
+        }
       };
 
       const handleDeleteChatMessage = (chatId) => {
@@ -474,11 +499,12 @@
         }
       }, [user, isDemo]);
 
-      // 3. 予約・チャット・イベント同期
+      // 3. 予約・チャット・イベント・管理者設定 同期
       useEffect(() => {
         if (!user) return;
 
         if (!isDemo) {
+          // 予約同期
           const resCollection = dbObj.collection('artifacts').doc(currentAppId).collection('public').doc('data').collection('reservations');
           const unsubscribeRes = resCollection.onSnapshot((snapshot) => {
             const list = [];
@@ -488,6 +514,7 @@
             setReservations(list);
           });
 
+          // チャットメッセージ同期
           const chatCollection = dbObj.collection('artifacts').doc(currentAppId).collection('public').doc('data').collection('chat_messages');
           const unsubscribeChat = chatCollection.onSnapshot((snapshot) => {
             const list = [];
@@ -498,26 +525,40 @@
             setChatMessages(list);
           });
 
+          // コミュニティイベント同期
           const eventsCollection = dbObj.collection('artifacts').doc(currentAppId).collection('public').doc('data').collection('events');
           const unsubscribeEvents = eventsCollection.onSnapshot((snapshot) => {
             const list = [];
             snapshot.forEach((doc) => {
               list.push({ id: doc.id, ...doc.data() });
             });
-            list.sort((a, b) => b.id.localeCompare(a.id)); // 新しいイベント順
+            list.sort((a, b) => b.id.localeCompare(a.id));
             setEventsList(list);
+          });
+
+          // シークレット管理者設定情報のセキュアなロード
+          const adminSettingsRef = dbObj.collection('artifacts').doc(currentAppId).collection('public').doc('data').collection('admin_settings').doc('config');
+          const unsubscribeAdmin = adminSettingsRef.onSnapshot((docSnap) => {
+            if (docSnap.exists) {
+              setAdminCredentials(docSnap.data());
+            } else {
+              adminSettingsRef.set(DEFAULT_ADMIN_CREDENTIALS);
+              setAdminCredentials(DEFAULT_ADMIN_CREDENTIALS);
+            }
           });
 
           return () => {
             unsubscribeRes();
             unsubscribeChat();
             unsubscribeEvents();
+            unsubscribeAdmin();
           };
         } else {
           const updateLocalData = () => {
             setReservations(getLocalData('reservations', []));
             setChatMessages(getLocalData('chat_messages', []));
             setEventsList(getLocalData('events', []));
+            setAdminCredentials(getLocalData('admin_settings', DEFAULT_ADMIN_CREDENTIALS));
           };
           updateLocalData();
           
@@ -648,7 +689,6 @@
           return;
         }
 
-        // 管理者が他人の予約を変更した場合は、元のユーザー名とIDを継承する
         const targetRes = reservationForm.id ? reservations.find(r => r.id === reservationForm.id) : null;
 
         const reservationPayload = {
@@ -707,14 +747,13 @@
         );
       };
 
-      // SNS型イベントコミュニティ機能のアクション
       const handleCreateEvent = (e) => {
         e.preventDefault();
         if (!newEventForm.title || !newEventForm.date || !newEventForm.description) return;
 
-        // 管理者モード中は、公式名義でイベント投稿可能
-        const creatorName = isAdmin ? "管理人のひろき" : (profile.nickname || '名無しキャンパー');
-        const avatarColor = isAdmin ? "bg-emerald-950" : (profile.avatarColor || 'bg-emerald-600');
+        // 管理者モード中は、最新の変更された公式名義/カラーでイベント投稿が可能
+        const creatorName = isAdmin ? adminCredentials.adminName : (profile.nickname || '名無しキャンパー');
+        const avatarColor = isAdmin ? adminCredentials.adminAvatarColor : (profile.avatarColor || 'bg-emerald-600');
 
         const eventPayload = {
           id: 'ev_' + Date.now(),
@@ -842,6 +881,18 @@
         );
       };
 
+      const changeMonth = (offset) => {
+        const nextDate = new Date(currentDate);
+        nextDate.setMonth(currentDate.getMonth() + offset);
+        setCurrentDate(nextDate);
+      };
+
+      const changeWeek = (offset) => {
+        const nextDate = new Date(currentDate);
+        nextDate.setDate(currentDate.getDate() + (offset * 7));
+        setCurrentDate(nextDate);
+      };
+
       const days = getDaysInMonth(currentDate);
       const weekDays = getDaysInWeek(currentDate);
       const monthNames = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"];
@@ -852,7 +903,6 @@
         const formatted = formatDateString(date);
         setSelectedDate(formatted);
         
-        // 管理者なら誰の予約でも対象（初めのヒット）、一般は自分の予約のみ
         const existing = reservations.find(r => r.date === formatted && (isAdmin ? true : r.userId === user?.uid));
         
         if (existing) {
@@ -927,7 +977,7 @@
             </div>
           )}
 
-          {/* 管理者ログイン画面 */}
+          {/* 管理者ログイン画面（IDとパスワードの2重シークレット認証） */}
           {showAdminModal && (
             <div className="fixed inset-0 z-50 bg-stone-900/60 flex items-center justify-center p-4 backdrop-blur-sm">
               <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl border border-stone-200 animate-fadeIn">
@@ -937,19 +987,33 @@
                 </div>
                 <form onSubmit={handleAdminLoginSubmit} className="p-5 space-y-4">
                   <p className="text-xs text-stone-500 leading-relaxed">
-                    管理者専用のシークレットパスワードを入力してください。
+                    管理スタッフ専用の認証情報を入力してください。
                   </p>
-                  <div>
-                    <input
-                      type="password"
-                      required
-                      placeholder="シークレットパスワードを入力"
-                      value={adminPasswordInput}
-                      onChange={(e) => setAdminPasswordInput(e.target.value)}
-                      className="w-full px-4 py-2 text-sm border border-stone-200 rounded-xl focus:ring-2 focus:ring-stone-800 outline-none"
-                    />
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-stone-500 mb-1">管理者ログインID</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="ログインIDを入力"
+                        value={adminIdInput}
+                        onChange={(e) => setAdminIdInput(e.target.value)}
+                        className="w-full px-4 py-2 text-sm border border-stone-200 rounded-xl focus:ring-2 focus:ring-stone-800 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-stone-500 mb-1">シークレットパスワード</label>
+                      <input
+                        type="password"
+                        required
+                        placeholder="パスワードを入力"
+                        value={adminPasswordInput}
+                        onChange={(e) => setAdminPasswordInput(e.target.value)}
+                        className="w-full px-4 py-2 text-sm border border-stone-200 rounded-xl focus:ring-2 focus:ring-stone-800 outline-none"
+                      />
+                    </div>
                   </div>
-                  <div className="flex justify-end gap-2">
+                  <div className="flex justify-end gap-2 pt-2">
                     <button
                       type="button"
                       onClick={() => setShowAdminModal(false)}
@@ -983,7 +1047,7 @@
               </div>
               
               <div className="flex items-center gap-3 bg-emerald-800/80 px-4 py-2 rounded-full border border-emerald-700">
-                <div className={`w-8 h-8 rounded-full ${isAdmin ? 'bg-stone-900' : (profile.avatarColor || 'bg-emerald-600')} flex items-center justify-center font-bold text-white text-sm`}>
+                <div className={`w-8 h-8 rounded-full ${isAdmin ? adminCredentials.adminAvatarColor : (profile.avatarColor || 'bg-emerald-600')} flex items-center justify-center font-bold text-white text-sm`}>
                   {isAdmin ? '👑' : (profile.nickname || 'G').charAt(0).toUpperCase()}
                 </div>
                 <div className="text-left">
@@ -991,7 +1055,7 @@
                     {isAdmin ? "👑 システム管理者" : (profile.googleLinked ? "Google連携中" : "一時ゲスト")}
                   </div>
                   <div className="text-sm font-medium leading-tight truncate max-w-[120px]">
-                    {isAdmin ? "管理者ひろき" : (profile.nickname || 'ゲスト')}
+                    {isAdmin ? adminCredentials.adminName : (profile.nickname || 'ゲスト')}
                   </div>
                 </div>
               </div>
@@ -1146,7 +1210,6 @@
                         
                         const formatted = formatDateString(day);
                         const dayReservations = reservations.filter(r => r.date === formatted);
-                        // 管理者なら全予約を自分の予約のようにハンドリング・編集可能
                         const isUserReserved = dayReservations.some(r => r.userId === user?.uid) || (isAdmin && dayReservations.length > 0);
                         const isToday = formatDateString(new Date()) === formatted;
 
@@ -1331,7 +1394,7 @@
 
                         return filtered.map((res) => {
                           const siteInfo = SITE_TYPES.find(s => s.id === res.siteType);
-                          const isOwn = res.userId === user?.uid || isAdmin; // 管理者なら全ての変更操作を行える
+                          const isOwn = res.userId === user?.uid || isAdmin;
                           const resDate = new Date(res.date);
 
                           return (
@@ -1503,12 +1566,12 @@
                     eventsList.map((ev) => {
                       const isLiked = ev.likes?.includes(user?.uid);
                       const isParticipant = ev.participants?.some(p => p.userId === user?.uid);
-                      const isCreator = ev.creatorId === user?.uid || isAdmin; // 管理者は全イベントを強制削除可能
+                      const isCreator = ev.creatorId === user?.uid || isAdmin;
 
                       return (
                         <div key={ev.id} className="bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden animate-fadeIn">
                           
-                          {/* イベントカード上部 (作成者＆カテゴリバッジ) */}
+                          {/* イベントカード上部 */}
                           <div className="p-5 pb-3 flex justify-between items-start">
                             <div className="flex items-center gap-3">
                               <div className={`w-10 h-10 rounded-full ${ev.avatarColor || 'bg-emerald-600'} flex items-center justify-center font-bold text-white text-sm`}>
@@ -1517,7 +1580,7 @@
                               <div>
                                 <p className="text-sm font-bold text-stone-800 flex items-center gap-1.5">
                                   <span>{ev.creatorName}</span>
-                                  {ev.avatarColor === "bg-emerald-950" && (
+                                  {(ev.avatarColor === adminCredentials.adminAvatarColor || ev.avatarColor === "bg-emerald-950") && (
                                     <span className="bg-stone-900 text-white text-[9px] px-1.5 py-0.5 rounded font-extrabold">👑 公式管理人</span>
                                   )}
                                 </p>
@@ -1557,10 +1620,9 @@
                             </p>
                           </div>
 
-                          {/* 参加表明アバターリスト & いいね/参加表明 SNSアクション */}
+                          {/* アクション/リアクション */}
                           <div className="px-5 py-3.5 bg-stone-50/50 border-t border-b border-stone-100 flex flex-wrap justify-between items-center gap-4">
                             
-                            {/* 参加キャンパーアバター重ね表示 */}
                             <div className="flex items-center gap-2">
                               <div className="flex -space-x-2">
                                 {(ev.participants || []).slice(0, 5).map((p, idx) => (
@@ -1583,7 +1645,6 @@
                               </span>
                             </div>
 
-                            {/* インタラクティブアクションボタン */}
                             <div className="flex items-center gap-2">
                               <button
                                 onClick={() => handleToggleLike(ev.id)}
@@ -1614,7 +1675,6 @@
                           <div className="p-5 bg-stone-50/20 space-y-4">
                             <h4 className="text-xs font-bold text-stone-500 tracking-wider">💬 コメントやり取り</h4>
 
-                            {/* 既存コメント一覧 */}
                             <div className="space-y-3">
                               {(ev.comments || []).map((comm) => (
                                 <div key={comm.id} className="text-xs bg-white p-3 rounded-xl border border-stone-100 flex flex-col gap-1 shadow-sm">
@@ -1629,7 +1689,6 @@
                               ))}
                             </div>
 
-                            {/* コメント追加フォーム */}
                             <div className="flex gap-2 pt-1">
                               <input
                                 type="text"
@@ -1749,6 +1808,81 @@
             {activeTab === 'profile' && (
               <div className="max-w-2xl mx-auto space-y-6">
                 
+                {/* 管理者ログイン中に表示される「シークレット認証・プロファイル設定変更パネル」 */}
+                {isAdmin && (
+                  <div className="bg-stone-900 text-stone-100 p-6 sm:p-8 rounded-2xl shadow-xl border border-stone-700 animate-fadeIn space-y-6">
+                    <div className="border-b border-stone-800 pb-4">
+                      <h3 className="text-base sm:text-lg font-bold text-stone-100 flex items-center gap-2">
+                        <span>👑 管理者認証アカウント設定</span>
+                        <span className="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider">SECURE</span>
+                      </h3>
+                      <p className="text-stone-400 text-xs mt-1">
+                        次回以降の管理者ログイン用「ID」「シークレットパスワード」、および管理人の「表示名」「テーマカラー」を変更できます。
+                      </p>
+                    </div>
+
+                    <form onSubmit={handleUpdateAdminSettings} className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-bold text-stone-400 mb-1">管理者ログインID</label>
+                          <input
+                            type="text"
+                            required
+                            value={adminCredentials.adminId}
+                            onChange={(e) => setAdminCredentials({ ...adminCredentials, adminId: e.target.value })}
+                            className="w-full px-4 py-2 bg-stone-800 border border-stone-700 text-stone-100 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none text-sm transition"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-stone-400 mb-1">管理者パスワード</label>
+                          <input
+                            type="password"
+                            required
+                            value={adminCredentials.adminPassword}
+                            onChange={(e) => setAdminCredentials({ ...adminCredentials, adminPassword: e.target.value })}
+                            className="w-full px-4 py-2 bg-stone-800 border border-stone-700 text-stone-100 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none text-sm transition"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-bold text-stone-400 mb-1">管理者としての表示名</label>
+                          <input
+                            type="text"
+                            required
+                            value={adminCredentials.adminName}
+                            onChange={(e) => setAdminCredentials({ ...adminCredentials, adminName: e.target.value })}
+                            className="w-full px-4 py-2 bg-stone-800 border border-stone-700 text-stone-100 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none text-sm transition"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-stone-400 mb-1">管理人アバターカラー</label>
+                          <select
+                            value={adminCredentials.adminAvatarColor}
+                            onChange={(e) => setAdminCredentials({ ...adminCredentials, adminAvatarColor: e.target.value })}
+                            className="w-full px-4 py-2 bg-stone-800 border border-stone-700 text-stone-100 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none text-sm transition"
+                          >
+                            <option value="bg-stone-900">チャコールストーン (黒系)</option>
+                            <option value="bg-red-800">クラシックバーガンディ (赤系)</option>
+                            <option value="bg-indigo-950">ミッドナイトオーシャン (紺系)</option>
+                            <option value="bg-emerald-950">ディープフォレスト (深緑系)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end pt-2">
+                        <button
+                          type="submit"
+                          className="px-6 py-2.5 bg-red-600 hover:bg-red-500 text-white font-extrabold text-xs rounded-xl shadow transition duration-150 flex items-center gap-2"
+                        >
+                          <span>管理者設定の変更を保存する</span>
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
                 {/* SNSアカウント連携セクション */}
                 <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-stone-100">
                   <h3 className="text-lg font-bold text-stone-800 mb-2 flex items-center gap-2">
@@ -1795,7 +1929,7 @@
                   <div className="mt-6 pt-6 border-t border-stone-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                     <div>
                       <p className="text-xs font-bold text-stone-600">🏕 CAMP LINK システム管理職スタッフの方</p>
-                      <p className="text-[10px] text-stone-400">管理者用画面に移行します。</p>
+                      <p className="text-[10px] text-stone-400">管理者用セキュリティ画面へ移行します。</p>
                     </div>
                     {isAdmin ? (
                       <button

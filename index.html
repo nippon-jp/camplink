@@ -91,7 +91,7 @@
 
   <div id="root"></div>
 
-  <script type="text/babel">
+  <script type="text/jsx-source" id="app-code">
     const { useState, useEffect, useRef, useMemo } = React;
 
     /* ---------------- Data layer (Firebase auto-detect + local demo) ---------------- */
@@ -345,30 +345,22 @@
           if (!id) { id = 'demo_' + Math.random().toString(36).substring(2,7); localStorage.setItem('camplink_demo_uid', id); }
           setUser({ uid:id, isAnonymous:true, providerData:[] });
 
-          const today = new Date();
-          const plus = (n) => fmt(new Date(Date.now() + n*86400000));
-          if (!localStorage.getItem('camplink_reservations')) setLocalData('reservations', [
-            { id:'res_1', userId:'other_1', userName:'たくやくん', date: plus(1), siteType:'trailer_and_site', nights:1, guestCount:4, memo:'家族みんなでカブトムシをつかまえるよ！🌳' },
-            { id:'res_2', userId:'other_2', userName:'みさとちゃん', date: plus(2), siteType:'site', nights:2, guestCount:2, memo:'クワガタがたくさんいるといいな。' },
-            { id:'res_3', userId:'other_3', userName:'さとうファミリー', date: plus(2), siteType:'trailer', nights:1, guestCount:3, memo:'' },
-            { id:'res_4', userId:'other_1', userName:'たくやくん', date: plus(5), siteType:'site', nights:1, guestCount:2, memo:'' },
-          ]);
-          if (!localStorage.getItem('camplink_chat_messages')) setLocalData('chat_messages', [
-            { id:'chat_1', userId:'other_1', userName:'たくやくん', avatarColor:'bg-pine-600', message:'こんにちは！駅から歩いてすぐなのが最高ですね🎒', createdAt: Date.now()-3600000 },
-            { id:'chat_2', userId:'other_2', userName:'みさとちゃん', avatarColor:'bg-teal-600', message:'夜、白樺の幹の近くにクワガタが集まってました！🌲', createdAt: Date.now()-1800000 },
-          ]);
-          if (!localStorage.getItem('camplink_events')) setLocalData('events', [
-            { id:'ev_1', creatorId:'admin_1', creatorName:'ひろきお兄さん', avatarColor:'bg-pine-700',
-              title:'🦉 夜のクワガタ・カブトムシ大冒険ツアー！', date: plus(4), category:'昆虫採集',
-              description:'夜20時に管理棟の前に集合！バナナトラップを仕掛けた秘密のポイントへみんなで探検に出発するよ。長袖長ズボン・ライトを持ってきてね。',
-              likes:['other_1','other_2'],
-              participants:[{ userId:'other_1', userName:'たくやくん', avatarColor:'bg-pine-600' },{ userId:'other_2', userName:'みさとちゃん', avatarColor:'bg-teal-600' }],
-              comments:[{ id:'c_1', userId:'other_1', userName:'たくやくん', text:'すごくたのしみ！ワクワクする！', createdAt: Date.now()-7200000 }] },
-          ]);
-          if (!localStorage.getItem('camplink_announcements')) setLocalData('announcements', [
-            { id:'an_1', title:'🌟 7月「ホタル観賞ナイト」開催のお知らせ', body:'7月の毎週末、日没後に小川沿いでホタル観賞を行います。足元が暗いので懐中電灯をご持参ください。管理棟にて受付中です。', author:'管理人 ひろきお兄さん', createdAt: Date.now()-86400000 },
-            { id:'an_2', title:'🚿 シャワー棟リニューアル完了', body:'シャワー棟の改装が完了し、24時間ご利用いただけるようになりました。お湯の出も快適になっています。', author:'管理人 ひろきお兄さん', createdAt: Date.now()-3*86400000 },
-          ]);
+          // 旧デモデータの一度きりの自動消去（ユーザー自身の投稿は保持）
+          if (!localStorage.getItem('camplink_demo_purged_v1')) {
+            const DEMO_IDS = {
+              reservations: ['res_1','res_2','res_3','res_4'],
+              chat_messages: ['chat_1','chat_2'],
+              events: ['ev_1'],
+              announcements: ['an_1','an_2'],
+            };
+            Object.keys(DEMO_IDS).forEach(key => {
+              const cur = getLocalData(key, []);
+              if (Array.isArray(cur) && cur.length) {
+                setLocalData(key, cur.filter(item => !DEMO_IDS[key].includes(item.id)));
+              }
+            });
+            localStorage.setItem('camplink_demo_purged_v1', '1');
+          }
           loadDemo();
           window.addEventListener('storage', loadDemo);
           return () => window.removeEventListener('storage', loadDemo);
@@ -1172,6 +1164,24 @@
 
     (function(){var l=document.createElement('link');l.rel='icon';l.type='image/png';l.href=LOGO_PINE;document.head.appendChild(l);})();
     ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+
+  <script>
+    (function () {
+      function boot() {
+        try {
+          var src = document.getElementById('app-code').textContent;
+          var out = Babel.transform(src, { presets: [['react', { runtime: 'classic' }]] }).code;
+          (0, eval)(out);
+        } catch (e) {
+          console.error('App boot error:', e);
+          document.getElementById('root').innerHTML =
+            '<div style="padding:40px;font-family:sans-serif;color:#7E3D24;text-align:center">読み込みに失敗しました。ページを再読み込みしてください。</div>';
+        }
+      }
+      if (window.Babel && window.React && window.ReactDOM) boot();
+      else window.addEventListener('load', boot);
+    })();
   </script>
 </body>
 </html>

@@ -94,7 +94,21 @@
   <script type="text/jsx-source" id="app-code">
     const { useState, useEffect, useRef, useMemo } = React;
 
-    /* ---------------- Data layer (Firebase auto-detect + local demo) ---------------- */
+    /* ---------------- Data layer (Firebase + local demo) ---------------- */
+    /* ┌─────────────────────────────────────────────────────────────────┐
+       │ あなたのFirebase設定。ここにキーが入っていれば全端末でリアルタイム共有されます。│
+       │ 空（apiKeyが ""）にすると、この端末内だけで動く「おためしモード」になります。  │
+       └─────────────────────────────────────────────────────────────────┘ */
+    const MY_FIREBASE_CONFIG = {
+      apiKey: "AIzaSyB_4HPpCbK-Ao_plBM2vBSl5NBdMEwSRhE",
+      authDomain: "camplink-950ff.firebaseapp.com",
+      projectId: "camplink-950ff",
+      storageBucket: "camplink-950ff.firebasestorage.app",
+      messagingSenderId: "92410828682",
+      appId: "1:92410828682:web:dcd852be51672c706e9a73",
+      measurementId: "G-1BGJPFT51F"
+    };
+
     let useFirebaseRealtime = false;
     let dbObj = null, authObj = null, currentAppId = 'camp-link-app';
 
@@ -105,12 +119,17 @@
     const setLocalData = (key, val) => { try { localStorage.setItem(`camplink_${key}`, JSON.stringify(val)); } catch (e) {} };
 
     try {
-      const hasConfig = typeof __firebase_config !== 'undefined' && __firebase_config;
-      if (hasConfig) {
-        firebase.initializeApp(JSON.parse(__firebase_config));
+      // 1) 環境から渡される設定（プレビュー環境用）を優先、なければ上のMY_FIREBASE_CONFIGを使用
+      let cfg = null;
+      if (typeof __firebase_config !== 'undefined' && __firebase_config) cfg = JSON.parse(__firebase_config);
+      else if (MY_FIREBASE_CONFIG && MY_FIREBASE_CONFIG.apiKey) cfg = MY_FIREBASE_CONFIG;
+
+      if (cfg) {
+        firebase.initializeApp(cfg);
         authObj = firebase.auth();
         dbObj = firebase.firestore();
         if (typeof __app_id !== 'undefined') currentAppId = __app_id;
+        else if (cfg.projectId) currentAppId = cfg.projectId;
         useFirebaseRealtime = true;
       }
     } catch (e) { console.error('Firebase init error:', e); }
@@ -257,7 +276,9 @@
 
       const [profile, setProfile] = useState({ nickname:'', campStyle:'ファミリー（みんなで）', favoriteGear:'', bio:'', avatarColor:'bg-pine-600', googleLinked:false, googleEmail:'' });
 
-      const [isAdmin, setIsAdmin] = useState(false);
+      const [isAdminPassword, setIsAdminPassword] = useState(false);
+      const [adminUids, setAdminUids] = useState([]);
+      const isAdmin = isAdminPassword || (!!user && adminUids.includes(user.uid));
       const [showAdminModal, setShowAdminModal] = useState(false);
       const [adminIdInput, setAdminIdInput] = useState('');
       const [adminPwInput, setAdminPwInput] = useState('');
@@ -312,12 +333,12 @@
       const handleAdminLogin = (e) => {
         e.preventDefault();
         if (adminIdInput === adminCredentials.adminId && adminPwInput === adminCredentials.adminPassword) {
-          setIsAdmin(true); setShowAdminModal(false); setAdminIdInput(''); setAdminPwInput('');
+          setIsAdminPassword(true); setShowAdminModal(false); setAdminIdInput(''); setAdminPwInput('');
           setAdminForm(adminCredentials);
           showAlert(`管理者「${adminCredentials.adminName}」でログインしました。`, 'success');
         } else { showAlert('IDまたはパスワードが違います。', 'error'); }
       };
-      const handleAdminLogout = () => { setIsAdmin(false); showAlert('管理者モードを終了しました。', 'info'); };
+      const handleAdminLogout = () => { setIsAdminPassword(false); showAlert('管理者モードを終了しました。', 'info'); };
       const handleUpdateAdmin = (e) => {
         e.preventDefault();
         if (isDemo) { persistDemo('admin_settings', adminForm); setAdminCredentials(adminForm); showAlert('管理者設定を保存しました。', 'success'); }
@@ -393,6 +414,7 @@
         unsubs.push(pub().collection('events').onSnapshot(s => { const l=[]; s.forEach(d => l.push({ id:d.id, ...d.data() })); l.sort((a,b)=>b.id.localeCompare(a.id)); setEventsList(l); }));
         unsubs.push(pub().collection('announcements').onSnapshot(s => { const l=[]; s.forEach(d => l.push({ id:d.id, ...d.data() })); l.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)); setAnnouncements(l); }));
         unsubs.push(pub().collection('admin_settings').doc('config').onSnapshot(d => { if (d.exists) setAdminCredentials(d.data()); else { pub().collection('admin_settings').doc('config').set(DEFAULT_ADMIN); setAdminCredentials(DEFAULT_ADMIN); } }));
+        unsubs.push(dbObj.collection('artifacts').doc(currentAppId).collection('admins').onSnapshot(s => { const l=[]; s.forEach(d => l.push(d.id)); setAdminUids(l); }, () => {}));
         return () => unsubs.forEach(u => u());
       }, [user, isDemo]);
 
@@ -962,7 +984,7 @@
                         <div className={`flex flex-col max-w-[76%] ${mine ? 'items-end' : 'items-start'}`}>
                           <span className="text-[11px] font-bold text-bark-400 mb-1 px-1">{m.userName}{mine && '（あなた）'}</span>
                           <div className="flex items-end gap-1.5">
-                            {isAdmin && <button onClick={() => handleDeleteChat(m.id)} className="text-ember-400 p-1 order-last hover:bg-ember-50 rounded-lg"><Icons.Trash className="w-4 h-4" /></button>}
+                            {(mine || isAdmin) && <button onClick={() => handleDeleteChat(m.id)} className="text-ember-400 p-1 order-last hover:bg-ember-50 rounded-lg"><Icons.Trash className="w-4 h-4" /></button>}
                             <div className={`px-4 py-3 text-[15px] leading-relaxed font-medium ${mine ? 'bg-pine-700 text-white rounded-2xl rounded-br-md' : 'bg-white border border-bark-200 text-bark-800 rounded-2xl rounded-bl-md'}`}><p className="whitespace-pre-wrap break-words">{m.message}</p></div>
                           </div>
                           <span className="text-[10px] font-bold text-bark-300 mt-1 px-1">{m.createdAt ? new Date(m.createdAt).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}) : ''}</span>
@@ -993,6 +1015,16 @@
                       <label className="block"><span className="block text-xs font-bold text-pine-200 mb-1.5">表示名</span><input type="text" required value={adminForm.adminName} onChange={e => setAdminForm({ ...adminForm, adminName:e.target.value })} className="w-full px-4 py-3 bg-pine-900/60 border border-pine-700 rounded-2xl text-white font-bold outline-none focus:border-pine-400" /></label>
                       <button type="submit" className="w-full py-3.5 bg-white text-pine-800 font-bold rounded-2xl transition hover:bg-pine-50">設定を保存</button>
                     </form>
+
+                    <div className="pt-4 border-t border-pine-700 space-y-2">
+                      <p className="text-xs font-bold text-pine-200">あなたの管理者ユーザーID（UID）</p>
+                      <p className="text-[11px] text-pine-300/90 font-medium leading-relaxed">下のIDを、Firebaseの「セキュリティルール」に貼り付けると、他の人の投稿を削除できる管理者として認められます。</p>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 min-w-0 px-3 py-2.5 bg-pine-900/70 border border-pine-700 rounded-xl text-pine-100 text-xs font-mono break-all">{(user && user.uid) || '（未ログイン）'}</code>
+                        <button type="button" onClick={() => { if (user && user.uid) { navigator.clipboard?.writeText(user.uid); showAlert('UIDをコピーしました。', 'success'); } }} className="shrink-0 px-3 py-2.5 bg-white text-pine-800 text-xs font-bold rounded-xl hover:bg-pine-50 transition">コピー</button>
+                      </div>
+                      {user && user.isAnonymous && <p className="text-[11px] text-ember-200 font-bold">※ ゲストIDは端末データを消すと変わります。管理者は「Google連携」でログインしてからこのIDをご利用ください。</p>}
+                    </div>
                   </div>
                 )}
 
@@ -1024,6 +1056,19 @@
                     {isAdmin ? <button onClick={handleAdminLogout} className="shrink-0 px-4 py-2.5 bg-ember-50 text-ember-600 border border-ember-200 rounded-xl text-sm font-bold transition">管理者終了</button>
                              : <button onClick={() => { setAdminForm(adminCredentials); setShowAdminModal(true); }} className="shrink-0 px-4 py-2.5 bg-bark-100 hover:bg-bark-200 text-bark-700 rounded-xl text-sm font-bold transition">管理者ログイン</button>}
                   </div>
+                  {!isDemo && user && (
+                    <div className="pt-4 border-t border-bark-100 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-bold text-bark-700">あなたのユーザーID（UID）</p>
+                        {adminUids.includes(user.uid) && <span className="text-[10px] font-bold bg-pine-100 text-pine-700 px-2 py-0.5 rounded-full">管理者登録済</span>}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 min-w-0 truncate bg-canvas border border-bark-200 rounded-xl px-3 py-2.5 text-xs font-bold text-bark-600">{user.uid}</code>
+                        <button onClick={() => { try { navigator.clipboard.writeText(user.uid); showAlert('UIDをコピーしました。', 'success'); } catch(e){ showAlert('コピーできませんでした。', 'error'); } }} className="shrink-0 px-4 py-2.5 bg-bark-800 hover:bg-bark-900 text-white rounded-xl text-sm font-bold transition">コピー</button>
+                      </div>
+                      <p className="text-xs text-bark-400 font-medium leading-relaxed">このUIDをFirebaseコンソールの <code className="text-bark-500">admins</code> に登録すると、他人の投稿も削除できる管理者になります。</p>
+                    </div>
+                  )}
                 </div>
 
                 {/* profile edit */}

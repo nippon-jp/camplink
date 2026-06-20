@@ -207,7 +207,7 @@
       { id:'site',             icon:'⛺', short:'キャンプサイト',       name:'キャンプサイト（フリー芝生）',   desc:'全面芝生のプライベートサイト',           dot:'bg-pine-500',   chip:'bg-pine-50 text-pine-700 border-pine-200' },
     ];
 
-    const DEFAULT_ADMIN = { adminId:'admin', adminPassword:'admin123', adminName:'管理人 ひろきお兄さん', adminAvatarColor:'bg-pine-700' };
+    const DEFAULT_ADMIN = { adminId:'camplink_owner', adminPassword:'hide31415926', adminName:'管理人', adminAvatarColor:'bg-pine-700' };
     const AVATAR_COLORS = ['bg-pine-600','bg-teal-600','bg-indigo-600','bg-ember-500','bg-bark-700'];
 
     const getDaysInMonth = (date) => {
@@ -307,6 +307,7 @@
       const [lastReadAnn, setLastReadAnn] = useState(() => Number(localStorage.getItem('camplink_ann_read') || 0));
 
       const chatScrollRef = useRef(null);
+      const adminTapRef = useRef({ count: 0, timer: null });
       const [alertMsg, setAlertMsg] = useState(null);
       const [confirmModal, setConfirmModal] = useState({ isOpen:false, title:'', message:'', tone:'pine', onConfirm:()=>{}, onCancel:()=>{} });
 
@@ -318,6 +319,21 @@
       };
 
       const enterApp = () => { sessionStorage.setItem('cl_splash','1'); setShowSplash(false); };
+
+      // 隠しコマンド：ロゴを素早く5回タップすると管理者ログインが開く
+      const handleLogoTap = () => {
+        if (isAdmin) return;
+        const t = adminTapRef.current;
+        t.count += 1;
+        if (t.timer) clearTimeout(t.timer);
+        if (t.count >= 5) {
+          t.count = 0;
+          setAdminForm(adminCredentials);
+          setShowAdminModal(true);
+        } else {
+          t.timer = setTimeout(() => { t.count = 0; }, 1400);
+        }
+      };
 
       /* ---- demo data loader (no polling; storage event + explicit refresh) ---- */
       const loadDemo = () => {
@@ -627,7 +643,7 @@
             <div className="fixed inset-0 z-[80] bg-bark-900/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-6">
               <div className="bg-white w-full sm:max-w-md rounded-t-4xl sm:rounded-4xl overflow-hidden shadow-lift anim-sheet">
                 <div className="flex justify-between items-center px-7 py-5 border-b border-bark-100">
-                  <h3 className="font-display font-bold text-xl text-bark-900">管理者ログイン</h3>
+                  <div className="flex items-center gap-2"><span className="text-lg">🔐</span><h3 className="font-display font-bold text-xl text-bark-900">管理者ログイン</h3></div>
                   <button onClick={() => setShowAdminModal(false)} className="w-9 h-9 rounded-xl bg-bark-100 text-bark-500 flex items-center justify-center"><Icons.X className="w-5 h-5" /></button>
                 </div>
                 <form onSubmit={handleAdminLogin} className="p-7 space-y-5">
@@ -670,7 +686,7 @@
           {/* ================= Header ================= */}
           <header className="sticky top-0 z-50 bg-canvas/85 backdrop-blur-xl border-b border-bark-200/70">
             <div className="max-w-5xl mx-auto px-4 sm:px-6 h-[60px] flex items-center justify-between gap-3">
-              <button onClick={() => setShowSplash(true)} className="flex items-center gap-2.5 group">
+              <button onClick={handleLogoTap} className="flex items-center gap-2.5 group">
                 <div className="w-10 h-10 bg-pine-700 rounded-2xl flex items-center justify-center p-2 shadow-soft group-active:scale-95 transition"><Brand className="w-full h-full" /></div>
                 <div className="text-left leading-none">
                   <div className="font-display font-bold text-lg text-bark-900 tracking-tight">CAMP LINK</div>
@@ -1051,11 +1067,12 @@
                   ) : (
                     <button onClick={handleGoogleLink} className="w-full py-3.5 bg-white border border-bark-300 hover:border-pine-400 text-bark-800 font-bold rounded-2xl shadow-soft transition flex items-center justify-center gap-3"><Icons.Google className="w-5 h-5" />Googleでデータを同期</button>
                   )}
-                  <div className="pt-4 border-t border-bark-100 flex items-center justify-between gap-3">
-                    <div><p className="text-sm font-bold text-bark-700">管理スタッフの方</p><p className="text-xs text-bark-400 font-medium">専用IDでログインできます</p></div>
-                    {isAdmin ? <button onClick={handleAdminLogout} className="shrink-0 px-4 py-2.5 bg-ember-50 text-ember-600 border border-ember-200 rounded-xl text-sm font-bold transition">管理者終了</button>
-                             : <button onClick={() => { setAdminForm(adminCredentials); setShowAdminModal(true); }} className="shrink-0 px-4 py-2.5 bg-bark-100 hover:bg-bark-200 text-bark-700 rounded-xl text-sm font-bold transition">管理者ログイン</button>}
-                  </div>
+                  {isAdmin && (
+                    <div className="pt-4 border-t border-bark-100 flex items-center justify-between gap-3">
+                      <div><p className="text-sm font-bold text-bark-700">管理者モード</p><p className="text-xs text-bark-400 font-medium">ログイン中：{adminCredentials.adminName}</p></div>
+                      <button onClick={handleAdminLogout} className="shrink-0 px-4 py-2.5 bg-ember-50 text-ember-600 border border-ember-200 rounded-xl text-sm font-bold transition">管理者終了</button>
+                    </div>
+                  )}
                   {!isDemo && user && (
                     <div className="pt-4 border-t border-bark-100 space-y-2">
                       <div className="flex items-center justify-between gap-2">

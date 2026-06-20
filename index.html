@@ -307,7 +307,6 @@
       const [lastReadAnn, setLastReadAnn] = useState(() => Number(localStorage.getItem('camplink_ann_read') || 0));
 
       const chatScrollRef = useRef(null);
-      const adminTapRef = useRef({ count: 0, timer: null });
       const [alertMsg, setAlertMsg] = useState(null);
       const [confirmModal, setConfirmModal] = useState({ isOpen:false, title:'', message:'', tone:'pine', onConfirm:()=>{}, onCancel:()=>{} });
 
@@ -320,20 +319,18 @@
 
       const enterApp = () => { sessionStorage.setItem('cl_splash','1'); setShowSplash(false); };
 
-      // 隠しコマンド：ロゴを素早く5回タップすると管理者ログインが開く
-      const handleLogoTap = () => {
-        if (isAdmin) return;
-        const t = adminTapRef.current;
-        t.count += 1;
-        if (t.timer) clearTimeout(t.timer);
-        if (t.count >= 5) {
-          t.count = 0;
-          setAdminForm(adminCredentials);
-          setShowAdminModal(true);
-        } else {
-          t.timer = setTimeout(() => { t.count = 0; }, 1400);
-        }
-      };
+      // 管理者の隠し入口：URLに ?admin が付いていたら起動時にログイン画面を開く
+      useEffect(() => {
+        try {
+          const q = window.location.search + ' ' + window.location.hash;
+          if (/(^|[?&#])admin\b/i.test(q)) {
+            setShowSplash(false);
+            sessionStorage.setItem('cl_splash','1');
+            setAdminForm(adminCredentials);
+            setShowAdminModal(true);
+          }
+        } catch (e) {}
+      }, []);
 
       /* ---- demo data loader (no polling; storage event + explicit refresh) ---- */
       const loadDemo = () => {
@@ -686,7 +683,7 @@
           {/* ================= Header ================= */}
           <header className="sticky top-0 z-50 bg-canvas/85 backdrop-blur-xl border-b border-bark-200/70">
             <div className="max-w-5xl mx-auto px-4 sm:px-6 h-[60px] flex items-center justify-between gap-3">
-              <button onClick={handleLogoTap} className="flex items-center gap-2.5 group">
+              <button onClick={() => setShowSplash(true)} className="flex items-center gap-2.5 group">
                 <div className="w-10 h-10 bg-pine-700 rounded-2xl flex items-center justify-center p-2 shadow-soft group-active:scale-95 transition"><Brand className="w-full h-full" /></div>
                 <div className="text-left leading-none">
                   <div className="font-display font-bold text-lg text-bark-900 tracking-tight">CAMP LINK</div>
@@ -1071,19 +1068,6 @@
                     <div className="pt-4 border-t border-bark-100 flex items-center justify-between gap-3">
                       <div><p className="text-sm font-bold text-bark-700">管理者モード</p><p className="text-xs text-bark-400 font-medium">ログイン中：{adminCredentials.adminName}</p></div>
                       <button onClick={handleAdminLogout} className="shrink-0 px-4 py-2.5 bg-ember-50 text-ember-600 border border-ember-200 rounded-xl text-sm font-bold transition">管理者終了</button>
-                    </div>
-                  )}
-                  {!isDemo && user && (
-                    <div className="pt-4 border-t border-bark-100 space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-bold text-bark-700">あなたのユーザーID（UID）</p>
-                        {adminUids.includes(user.uid) && <span className="text-[10px] font-bold bg-pine-100 text-pine-700 px-2 py-0.5 rounded-full">管理者登録済</span>}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <code className="flex-1 min-w-0 truncate bg-canvas border border-bark-200 rounded-xl px-3 py-2.5 text-xs font-bold text-bark-600">{user.uid}</code>
-                        <button onClick={() => { try { navigator.clipboard.writeText(user.uid); showAlert('UIDをコピーしました。', 'success'); } catch(e){ showAlert('コピーできませんでした。', 'error'); } }} className="shrink-0 px-4 py-2.5 bg-bark-800 hover:bg-bark-900 text-white rounded-xl text-sm font-bold transition">コピー</button>
-                      </div>
-                      <p className="text-xs text-bark-400 font-medium leading-relaxed">このUIDをFirebaseコンソールの <code className="text-bark-500">admins</code> に登録すると、他人の投稿も削除できる管理者になります。</p>
                     </div>
                   )}
                 </div>

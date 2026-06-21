@@ -284,8 +284,8 @@
       const [showAdminModal, setShowAdminModal] = useState(false);
       const [adminIdInput, setAdminIdInput] = useState('');
       const [adminPwInput, setAdminPwInput] = useState('');
-      const [adminCredentials, setAdminCredentials] = useState(DEFAULT_ADMIN);
-      const [adminForm, setAdminForm] = useState(DEFAULT_ADMIN);
+      const [adminCredentials, setAdminCredentials] = useState(() => getLocalData('admin_settings', DEFAULT_ADMIN));
+      const [adminForm, setAdminForm] = useState(() => getLocalData('admin_settings', DEFAULT_ADMIN));
 
       const [reservations, setReservations] = useState([]);
       const [chatMessages, setChatMessages] = useState([]);
@@ -356,10 +356,11 @@
       const handleAdminLogout = () => { setIsAdminPassword(false); showAlert('管理者モードを終了しました。', 'info'); };
       const handleUpdateAdmin = (e) => {
         e.preventDefault();
-        if (isDemo) { persistDemo('admin_settings', adminForm); setAdminCredentials(adminForm); showAlert('管理者設定を保存しました。', 'success'); }
-        else { pub().collection('admin_settings').doc('config').set(adminForm)
-          .then(() => { setAdminCredentials(adminForm); showAlert('管理者設定をクラウドへ保存しました。', 'success'); })
-          .catch(() => showAlert('保存に失敗しました。', 'error')); }
+        // 管理者の認証情報は端末内（localStorage）に保存する。
+        // パスワードを公開クラウドに置かないため＆ルールに依存せず確実に保存するため。
+        setLocalData('admin_settings', adminForm);
+        setAdminCredentials(adminForm);
+        showAlert('管理者設定を保存しました。', 'success');
       };
 
       /* ---- auth ---- */
@@ -428,7 +429,6 @@
         unsubs.push(pub().collection('chat_messages').onSnapshot(s => { const l=[]; s.forEach(d => l.push({ id:d.id, ...d.data() })); l.sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)); setChatMessages(l); }));
         unsubs.push(pub().collection('events').onSnapshot(s => { const l=[]; s.forEach(d => l.push({ id:d.id, ...d.data() })); l.sort((a,b)=>b.id.localeCompare(a.id)); setEventsList(l); }));
         unsubs.push(pub().collection('announcements').onSnapshot(s => { const l=[]; s.forEach(d => l.push({ id:d.id, ...d.data() })); l.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)); setAnnouncements(l); }));
-        unsubs.push(pub().collection('admin_settings').doc('config').onSnapshot(d => { if (d.exists) setAdminCredentials(d.data()); else { pub().collection('admin_settings').doc('config').set(DEFAULT_ADMIN); setAdminCredentials(DEFAULT_ADMIN); } }));
         unsubs.push(dbObj.collection('artifacts').doc(currentAppId).collection('admins').onSnapshot(s => { const l=[]; s.forEach(d => l.push(d.id)); setAdminUids(l); }, () => {}));
         return () => unsubs.forEach(u => u());
       }, [user, isDemo]);

@@ -5,6 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>CAMP LINK｜北広島クワカブキャンプ場 予約＆コミュニティ</title>
 
+  <!-- ホーム画面アイコン / PWA -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+  <meta name="theme-color" content="#234A37">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="CAMP LINK">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="application-name" content="CAMP LINK">
+
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -59,6 +72,9 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+  <!-- Device Fingerprinting（重複登録検知用 / FingerprintJS OSS） -->
+  <script src="https://openfpcdn.io/fingerprintjs/v4/iife.min.js"></script>
 
   <style>
     html, body { background-color: #F3EFE5; }
@@ -322,6 +338,12 @@
       const [activeTab, setActiveTab] = useState('calendar');
       const [calendarMode, setCalendarMode] = useState('monthly');
       const [isDemo, setIsDemo] = useState(!useFirebaseRealtime);
+      // 重複端末検知：'checking' | 'ok' | 'duplicate'
+      const [deviceState, setDeviceState] = useState('checking');
+      const [myDeviceId, setMyDeviceId] = useState('');
+      const [deviceList, setDeviceList] = useState([]);
+      const [deviceLoading, setDeviceLoading] = useState(false);
+      const deviceCheckedRef = useRef(false);
 
       const [profile, setProfile] = useState({ nickname:'', campStyle:'', prefecture:'', bio:'', avatarColor:'bg-pine-600', googleLinked:false, googleEmail:'', sns:{ instagram:'', x:'', line:'', website:'' } });
 
@@ -407,6 +429,27 @@
         } else { showAlert('IDまたはパスワードが違います。', 'error'); }
       };
       const handleAdminLogout = () => { setIsAdminPassword(false); showAlert('管理者モードを終了しました。', 'info'); };
+
+      /* ---- 登録端末の管理（ロックされた人の救済） ---- */
+      const loadDevices = async () => {
+        if (isDemo || !dbObj) { showAlert('端末管理はクラウド接続時のみ利用できます。', 'info'); return; }
+        setDeviceLoading(true);
+        try {
+          const snap = await dbObj.collection('artifacts').doc(currentAppId).collection('devices').get();
+          const list = snap.docs.map(d => ({ id:d.id, ...d.data() })).sort((a,b) => (b.createdAt||0)-(a.createdAt||0));
+          setDeviceList(list);
+          if (!list.length) showAlert('登録された端末はまだありません。', 'info');
+        } catch (e) { console.error('loadDevices error:', e); showAlert('端末一覧の取得に失敗しました。セキュリティルールを確認してください。', 'error'); }
+        setDeviceLoading(false);
+      };
+      const handleDeleteDevice = (id) => showConfirm('この端末の登録を解除しますか？', '解除すると、この端末から新しいアカウントを作り直せるようになります。', async () => {
+        try {
+          await dbObj.collection('artifacts').doc(currentAppId).collection('devices').doc(id).delete();
+          setDeviceList(list => list.filter(d => d.id !== id));
+          if (id === myDeviceId) { deviceCheckedRef.current = false; setDeviceState('ok'); } // 自端末を解除した場合はブロック解除
+          showAlert('端末の登録を解除しました。', 'success');
+        } catch (e) { console.error('deleteDevice error:', e); showAlert('解除に失敗しました。管理者UIDをルールに登録してください。', 'error'); }
+      }, 'ember');
       const handleUpdateAdmin = (e) => {
         e.preventDefault();
         // 管理者の認証情報は端末内（localStorage）に保存する。
@@ -421,8 +464,34 @@
         if (!isDemo) {
           (async () => {
             try {
-              if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) await authObj.signInWithCustomToken(__initial_auth_token);
-              else await authObj.signInAnonymously();
+              // Googleログイン（redirect方式）から戻ってきた場合の結果を受け取る。
+              // 403 などのエラーはここで表面化される。
+              let redirectUser = null;
+              try {
+                const rr = await authObj.getRedirectResult();
+                if (rr && rr.user) {
+                  redirectUser = rr.user;
+                  const gName = rr.user.displayName || '';
+                  const ref = dbObj.collection('artifacts').doc(currentAppId).collection('users').doc(rr.user.uid).collection('profile').doc('info');
+                  const snap = await ref.get();
+                  const cur = snap.exists ? snap.data() : {};
+                  const curNick = cur.nickname || '';
+                  const up = { ...cur, nickname: (!curNick || curNick === 'キャンパー' || curNick.startsWith('キャンパー_')) && gName ? gName : curNick, googleLinked:true, googleEmail:rr.user.email || '' };
+                  await ref.set(up, { merge:true });
+                  showAlert('Googleアカウントと連携しました！', 'success');
+                }
+              } catch (re) {
+                console.error('getRedirectResult error:', re);
+                const code = (re && (re.code || re.message)) || '';
+                if (/disallowed_useragent|403/.test(String(code))) showAlert('このブラウザではGoogleログインがブロックされました。Safari / Chrome で開いてお試しください。', 'error');
+                else if (/unauthorized-domain/.test(code)) showAlert('このドメインはFirebaseで未許可です（承認済みドメインに追加してください）。', 'error');
+                else if (code) showAlert('Googleログインエラー（' + code + '）', 'error');
+              }
+              // 既にログイン済み（redirect復帰含む）なら匿名サインインで上書きしない。
+              if (!redirectUser && !authObj.currentUser) {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) await authObj.signInWithCustomToken(__initial_auth_token);
+                else await authObj.signInAnonymously();
+              }
             } catch (e) { setIsDemo(true); showAlert('クラウド未接続のため、おためしモードで起動します。', 'info'); }
           })();
           const unsub = authObj.onAuthStateChanged((u) => {
@@ -457,7 +526,44 @@
         }
       }, [isDemo]);
 
-      /* ---- profile sync ---- */
+      /* ---- 重複端末検知（アプリ起動時を「登録」とみなし、同じ端末からの重複アカウントを拒否） ---- */
+      /*
+        仕組み：端末ごとに安定した fingerprint を作り、Firestore の
+        artifacts/{appId}/devices/{fingerprint} を「登録台帳」として使う。
+        ・台帳に未登録      → 現在のUIDで新規作成（この端末の正規アカウント）
+        ・台帳のUIDと一致   → 通常の再訪問・OK
+        ・台帳のUIDと不一致 → データ消去等で新UIDになった重複登録 → ブロック
+        ※ クライアントのチェックは補助。本番の担保は Firestore ルール（devices は create のみ許可）で行う。
+      */
+      useEffect(() => {
+        if (isDemo) { setDeviceState('ok'); return; }          // おためしモードは対象外
+        if (!user || !dbObj) return;
+        if (deviceCheckedRef.current) return;                  // 1セッション1回だけ
+        deviceCheckedRef.current = true;
+        (async () => {
+          try {
+            if (typeof FingerprintJS === 'undefined') { setDeviceState('ok'); return; } // 読込失敗時はフェイルオープン
+            const fp = await FingerprintJS.load();
+            const { visitorId } = await fp.get();
+            setMyDeviceId(visitorId);
+            const ref = dbObj.collection('artifacts').doc(currentAppId).collection('devices').doc(visitorId);
+            const snap = await ref.get();
+            if (!snap.exists) {
+              // 初回：この端末を現在のアカウントに紐づけて登録
+              await ref.set({ uid:user.uid, createdAt:Date.now() });
+              setDeviceState('ok');
+            } else if (snap.data().uid === user.uid) {
+              setDeviceState('ok');                            // 同じアカウントの再訪問
+            } else {
+              setDeviceState('duplicate');                     // 別UIDでの重複登録→ブロック
+            }
+          } catch (e) {
+            console.error('device check error:', e);
+            setDeviceState('ok');                               // エラー時はブロックせずフェイルオープン
+          }
+        })();
+      }, [user, isDemo]);
+
       useEffect(() => {
         if (!user) return;
         if (!isDemo) {
@@ -495,18 +601,56 @@
       }, [chatMessages, activeTab]);
 
       /* ---- google / signout / profile ---- */
+      // アプリ内ブラウザ（LINE / Instagram / Facebook / X など）の検知。
+      // Google は webview からの OAuth を 403（disallowed_useragent）でブロックするため、
+      // その場合は外部ブラウザで開くよう案内する。
+      const isInAppWebView = () => {
+        const ua = (navigator.userAgent || '').toLowerCase();
+        return /(line|fban|fbav|fb_iab|instagram|twitter|micromessenger|; wv\)|kakaotalk)/.test(ua);
+      };
+      // モバイル端末 or ホーム画面に追加したPWA（standalone）では popup が不安定なため redirect を使う。
+      const shouldUseRedirect = () => {
+        const standalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+        const mobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent || '');
+        return standalone || mobile;
+      };
+      // 403 などの生のエラーコードをユーザーに見せて原因を特定しやすくする。
+      const googleErrorMessage = (e) => {
+        const code = (e && (e.code || e.message)) || '不明なエラー';
+        if (/disallowed_useragent|403/.test(String(code))) return 'このアプリ内ブラウザではGoogleログインできません。Safari / Chrome で開いてからお試しください。';
+        if (/unauthorized-domain/.test(code)) return 'このドメインはFirebaseで未許可です（Authentication › 設定 › 承認済みドメインに追加してください）。';
+        if (/operation-not-allowed/.test(code)) return 'GoogleログインがFirebaseで無効です（Authentication › Sign-in method で有効化してください）。';
+        if (/popup-blocked|popup-closed|cancelled-popup/.test(code)) return 'ポップアップがブロックされました。もう一度お試しください。';
+        if (/credential-already-in-use|email-already-in-use|account-exists/.test(code)) return 'このGoogleアカウントは既に使われています。';
+        return 'Googleログインに失敗しました（' + code + '）';
+      };
       const handleGoogleLink = async () => {
         if (isDemo) { setProfile(p => ({ ...p, googleLinked:true, googleEmail:'demo.camper@gmail.com', nickname:'クワカブマスター星野' })); showAlert('おためしモードでは、デモ連携として完了します。', 'info'); return; }
+        if (isInAppWebView()) { showAlert('このアプリ内ブラウザではGoogleログインできません。右上のメニューから Safari / Chrome で開いてお試しください。', 'error'); return; }
         const provider = new firebase.auth.GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' });
         try {
+          if (shouldUseRedirect()) {
+            // redirect 方式：戻ってきたときに getRedirectResult で処理（auth useEffect 参照）
+            if (user.isAnonymous) await user.linkWithRedirect(provider);
+            else await authObj.signInWithRedirect(provider);
+            return;
+          }
           if (user.isAnonymous) {
             const r = await user.linkWithPopup(provider);
             const gName = r.user.displayName || '';
             const up = { ...profile, nickname: (profile.nickname === 'キャンパー' || profile.nickname.startsWith('キャンパー_')) && gName ? gName : profile.nickname, googleLinked:true, googleEmail:r.user.email || '' };
-            await dbObj.collection('artifacts').doc(currentAppId).collection('users').doc(user.uid).collection('profile').doc('info').set(up);
+            await dbObj.collection('artifacts').doc(currentAppId).collection('users').doc(user.uid).collection('profile').doc('info').set(up, { merge:true });
             showAlert('Googleアカウントと連携しました！', 'success');
           } else { await authObj.signInWithPopup(provider); showAlert('Googleでサインインしました。', 'success'); }
-        } catch (e) { showAlert('アカウント連携に失敗しました。', 'error'); }
+        } catch (e) {
+          console.error('Google login error:', e);
+          // popup が使えない環境なら redirect に自動フォールバック
+          if (e && /popup|operation-not-supported|web-storage/.test(e.code || '')) {
+            try { if (user.isAnonymous) await user.linkWithRedirect(provider); else await authObj.signInWithRedirect(provider); return; } catch (e2) { showAlert(googleErrorMessage(e2), 'error'); return; }
+          }
+          showAlert(googleErrorMessage(e), 'error');
+        }
       };
       const handleSignOut = () => showConfirm('サインアウトしますか？', 'ログアウトして初期のゲストアカウントに戻ります。', async () => {
         if (isDemo) { setProfile(p => ({ ...p, googleLinked:false, googleEmail:'' })); showAlert('サインアウトしました。', 'info'); return; }
@@ -730,6 +874,23 @@
 
       return (
         <div className="min-h-[100dvh] bg-paper text-bark-900 flex flex-col selection:bg-pine-200">
+
+          {/* ================= 重複端末ブロック ================= */}
+          {deviceState === 'duplicate' && (
+            <div className="fixed inset-0 z-[110] bg-canvas flex flex-col items-center justify-center px-8 text-center">
+              <div className="w-20 h-20 bg-ember-50 border border-ember-200 rounded-3xl flex items-center justify-center mb-7">
+                <svg className="w-9 h-9 text-ember-500" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>
+              </div>
+              <h2 className="font-display font-bold text-2xl text-bark-900 mb-3">この端末は登録済みです</h2>
+              <p className="text-bark-600 font-medium leading-relaxed max-w-sm">
+                この端末ではすでにアカウントが作成されています。<br />
+                1つの端末につき作成できるアカウントは1つまでです。
+              </p>
+              <p className="text-bark-400 text-sm font-medium mt-6 max-w-sm leading-relaxed">
+                心当たりがない場合や、以前のアカウントにログインしたい場合は、管理者までお問い合わせください。
+              </p>
+            </div>
+          )}
 
           {/* ================= Splash ================= */}
           {showSplash && (
@@ -1345,6 +1506,38 @@
                       <textarea required rows="3" placeholder="本文を入力…" value={annForm.body} onChange={e => setAnnForm({ ...annForm, body:e.target.value })} className={`${inputCls} resize-none`} />
                       <button type="submit" className="w-full py-3.5 bg-ember-500 hover:bg-ember-600 text-white font-bold rounded-2xl transition">お知らせを配信</button>
                     </form>
+                  </div>
+                )}
+
+                {isAdmin && !isDemo && (
+                  <div className="bg-white border border-bark-200 rounded-4xl p-6 shadow-soft space-y-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <svg className="w-5 h-5 text-pine-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" /></svg>
+                        <h3 className="font-display font-bold text-lg text-bark-900">登録端末の管理</h3>
+                      </div>
+                      <button onClick={loadDevices} disabled={deviceLoading} className="shrink-0 px-4 py-2.5 bg-pine-700 hover:bg-pine-600 disabled:opacity-50 text-white text-sm font-bold rounded-xl transition">{deviceLoading ? '読込中…' : (deviceList.length ? '更新' : '一覧を表示')}</button>
+                    </div>
+                    <p className="text-xs text-bark-400 font-medium leading-relaxed">重複登録でロックされた人を救済するには、該当する端末の「解除」を押してください。その端末から再登録できるようになります。</p>
+                    {deviceList.length > 0 && (
+                      <div className="space-y-2.5">
+                        {deviceList.map(d => {
+                          const mine = d.id === myDeviceId;
+                          return (
+                            <div key={d.id} className={`flex items-center gap-3 rounded-2xl border p-3.5 ${mine ? 'bg-pine-50 border-pine-200' : 'bg-canvas border-bark-200'}`}>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <code className="text-xs font-mono font-bold text-bark-700 truncate">{d.id.slice(0, 12)}…</code>
+                                  {mine && <span className="shrink-0 text-[10px] font-bold text-pine-700 bg-pine-100 px-1.5 py-0.5 rounded-full">この端末</span>}
+                                </div>
+                                <p className="text-[11px] text-bark-400 font-medium mt-1 truncate">UID: {(d.uid || '').slice(0, 16)}… ・ {d.createdAt ? relTime(d.createdAt) : '日時不明'}</p>
+                              </div>
+                              <button onClick={() => handleDeleteDevice(d.id)} className="shrink-0 flex items-center gap-1.5 px-3 py-2 bg-ember-50 text-ember-600 border border-ember-200 hover:bg-ember-100 rounded-xl text-sm font-bold transition"><Icons.Trash className="w-4 h-4" />解除</button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
 

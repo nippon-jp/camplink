@@ -198,6 +198,28 @@
           <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.85c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
         </svg>
       ),
+      Instagram: ({ className = 'w-5 h-5' }) => (
+        <svg className={className} fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2.16c3.2 0 3.58.01 4.85.07 1.17.05 1.8.25 2.23.41.56.22.96.48 1.38.9.42.42.68.82.9 1.38.16.42.36 1.06.41 2.23.06 1.27.07 1.65.07 4.85s-.01 3.58-.07 4.85c-.05 1.17-.25 1.8-.41 2.23-.22.56-.48.96-.9 1.38-.42.42-.82.68-1.38.9-.42.16-1.06.36-2.23.41-1.27.06-1.65.07-4.85.07s-3.58-.01-4.85-.07c-1.17-.05-1.8-.25-2.23-.41a3.7 3.7 0 01-1.38-.9 3.7 3.7 0 01-.9-1.38c-.16-.42-.36-1.06-.41-2.23-.06-1.27-.07-1.65-.07-4.85s.01-3.58.07-4.85c.05-1.17.25-1.8.41-2.23.22-.56.48-.96.9-1.38.42-.42.82-.68 1.38-.9.42-.16 1.06-.36 2.23-.41C8.42 2.17 8.8 2.16 12 2.16zM12 0C8.74 0 8.33.01 7.05.07 5.78.13 4.9.33 4.14.63c-.79.3-1.46.72-2.12 1.38C1.35 2.68.93 3.34.63 4.14.33 4.9.13 5.78.07 7.05.01 8.33 0 8.74 0 12s.01 3.67.07 4.95c.06 1.27.26 2.15.56 2.91.3.8.72 1.46 1.38 2.12.66.66 1.33 1.08 2.12 1.38.76.3 1.64.5 2.91.56C8.33 23.99 8.74 24 12 24s3.67-.01 4.95-.07c1.27-.06 2.15-.26 2.91-.56a5.86 5.86 0 002.12-1.38c.66-.66 1.08-1.32 1.38-2.12.3-.76.5-1.64.56-2.91.06-1.28.07-1.69.07-4.95s-.01-3.67-.07-4.95c-.06-1.27-.26-2.15-.56-2.91a5.86 5.86 0 00-1.38-2.12A5.86 5.86 0 0019.86.63c-.76-.3-1.64-.5-2.91-.56C15.67.01 15.26 0 12 0zm0 5.84a6.16 6.16 0 100 12.32 6.16 6.16 0 000-12.32zM12 16a4 4 0 110-8 4 4 0 010 8zm6.41-10.85a1.44 1.44 0 100 2.88 1.44 1.44 0 000-2.88z"/>
+        </svg>
+      ),
+      X: ({ className = 'w-5 h-5' }) => (
+        <svg className={className} fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M18.9 1.5h3.68l-8.04 9.19L24 22.5h-7.41l-5.8-7.58-6.64 7.58H.46l8.6-9.83L0 1.5h7.6l5.24 6.93L18.9 1.5zm-1.29 18.8h2.04L6.49 3.6H4.3l13.31 16.7z"/>
+        </svg>
+      ),
+      Line: ({ className = 'w-5 h-5' }) => (
+        <svg className={className} fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M24 10.3C24 4.93 18.62.56 12 .56S0 4.93 0 10.3c0 4.81 4.27 8.84 10.03 9.6.39.09.92.26 1.06.59.12.3.08.77.04 1.08l-.17 1.03c-.05.3-.24 1.19 1.04.65 1.28-.54 6.91-4.07 9.43-6.97 1.74-1.91 2.57-3.85 2.57-5.98zM7.77 13.4H5.39a.63.63 0 01-.63-.63V8.01a.63.63 0 011.26 0v4.13h1.75a.63.63 0 010 1.26zm2.47-.63a.63.63 0 01-1.26 0V8.01a.63.63 0 011.26 0v4.76zm5.74 0a.63.63 0 01-.43.6.63.63 0 01-.2.03.63.63 0 01-.51-.25l-2.44-3.32v2.94a.63.63 0 01-1.26 0V8.01a.63.63 0 01.43-.6.63.63 0 01.71.22l2.44 3.32V8.01a.63.63 0 011.26 0v4.76zm3.8-2.38a.63.63 0 010 1.26h-1.75v1.12h1.75a.63.63 0 010 1.26h-2.38a.63.63 0 01-.63-.63V8.01a.63.63 0 01.63-.63h2.38a.63.63 0 010 1.26h-1.75v1.12h1.75z"/>
+        </svg>
+      ),
+      Globe: (p) => <Stroke {...p} d={["M2.25 12h19.5","M12 2.25c2.69 2.7 4.2 6.36 4.2 9.75s-1.51 7.05-4.2 9.75c-2.69-2.7-4.2-6.36-4.2-9.75S9.31 4.95 12 2.25z","M12 2.25a9.75 9.75 0 100 19.5 9.75 9.75 0 000-19.5z"]} />,
+      Star: ({ filled, className = 'w-5 h-5' }) => (
+        <svg className={className} fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.5a.56.56 0 011.04 0l2.13 4.86 5.28.48a.56.56 0 01.32.98l-3.98 3.5 1.17 5.18a.56.56 0 01-.83.6L12 16.84l-4.6 2.74a.56.56 0 01-.83-.6l1.17-5.18-3.98-3.5a.56.56 0 01.32-.98l5.28-.48L11.48 3.5z" />
+        </svg>
+      ),
+      Photo: (p) => <Stroke {...p} d={["M2.25 15.75l5.16-5.16a2.25 2.25 0 013.18 0l5.16 5.16m-1.5-1.5l1.41-1.41a2.25 2.25 0 013.18 0l2.16 2.16","M2.25 18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V6A2.25 2.25 0 0019.5 3.75h-15A2.25 2.25 0 002.25 6v12z","M15.75 9.75a.75.75 0 100-1.5.75.75 0 000 1.5z"]} />,
     };
 
     /* ---------------- Constants & helpers ---------------- */
@@ -211,6 +233,31 @@
     const AVATAR_COLORS = ['bg-pine-600','bg-teal-600','bg-indigo-600','bg-ember-500','bg-bark-700'];
 
     const PREFECTURES = ['北海道','青森県','岩手県','宮城県','秋田県','山形県','福島県','茨城県','栃木県','群馬県','埼玉県','千葉県','東京都','神奈川県','新潟県','富山県','石川県','福井県','山梨県','長野県','岐阜県','静岡県','愛知県','三重県','滋賀県','京都府','大阪府','兵庫県','奈良県','和歌山県','鳥取県','島根県','岡山県','広島県','山口県','徳島県','香川県','愛媛県','高知県','福岡県','佐賀県','長崎県','熊本県','大分県','宮崎県','鹿児島県','沖縄県'];
+
+    // SNS入力欄の定義と、入力値からリンクURLを生成するヘルパー
+    const SNS_DEFS = [
+      { key:'instagram', label:'Instagram', Icon:'Instagram', color:'#E1306C', ph:'ユーザー名 または URL' },
+      { key:'x',         label:'X (Twitter)', Icon:'X',       color:'#000000', ph:'ユーザー名 または URL' },
+      { key:'line',      label:'LINE',      Icon:'Line',      color:'#06C755', ph:'友だち追加URL' },
+      { key:'website',   label:'ウェブサイト', Icon:'Globe',   color:'#2C5E45', ph:'https://…' },
+    ];
+    const snsToUrl = (key, raw) => {
+      if (!raw) return '';
+      let v = String(raw).trim();
+      if (!v) return '';
+      if (/^https?:\/\//i.test(v)) return v;
+      v = v.replace(/^@/, '');
+      if (key === 'instagram') return 'https://instagram.com/' + v;
+      if (key === 'x')         return 'https://x.com/' + v;
+      return 'https://' + v; // line / website はドメイン直書きにも対応
+    };
+
+    // みんなの口コミ・写真・情報 フィードの投稿タイプ
+    const REVIEW_TYPES = [
+      { id:'review', label:'口コミ', icon:'Star',  hint:'泊まった感想や評価をシェア', chip:'bg-ember-50 text-ember-600 border-ember-200', dot:'bg-ember-500' },
+      { id:'photo',  label:'写真',   icon:'Photo', hint:'現地で撮った写真を投稿',     chip:'bg-indigo-50 text-indigo-600 border-indigo-200', dot:'bg-indigo-500' },
+      { id:'info',   label:'情報',   icon:'Info',  hint:'持ち物・周辺施設などの豆知識', chip:'bg-pine-50 text-pine-600 border-pine-200', dot:'bg-pine-500' },
+    ];
 
     const getDaysInMonth = (date) => {
       const y = date.getFullYear(), m = date.getMonth();
@@ -276,7 +323,7 @@
       const [calendarMode, setCalendarMode] = useState('monthly');
       const [isDemo, setIsDemo] = useState(!useFirebaseRealtime);
 
-      const [profile, setProfile] = useState({ nickname:'', campStyle:'', prefecture:'', bio:'', avatarColor:'bg-pine-600', googleLinked:false, googleEmail:'' });
+      const [profile, setProfile] = useState({ nickname:'', campStyle:'', prefecture:'', bio:'', avatarColor:'bg-pine-600', googleLinked:false, googleEmail:'', sns:{ instagram:'', x:'', line:'', website:'' } });
 
       const [isAdminPassword, setIsAdminPassword] = useState(false);
       const [adminUids, setAdminUids] = useState([]);
@@ -290,6 +337,7 @@
       const [reservations, setReservations] = useState([]);
       const [chatMessages, setChatMessages] = useState([]);
       const [eventsList, setEventsList] = useState([]);
+      const [reviews, setReviews] = useState([]);
       const [announcements, setAnnouncements] = useState([]);
       const [currentDate, setCurrentDate] = useState(new Date());
       const [listFilter, setListFilter] = useState('all');
@@ -302,6 +350,10 @@
       const [showEventCreate, setShowEventCreate] = useState(false);
       const [eventForm, setEventForm] = useState({ title:'', date:'', category:'昆虫採集', description:'', image:'' });
       const [eventComments, setEventComments] = useState({});
+      const [showReviewCreate, setShowReviewCreate] = useState(false);
+      const [reviewForm, setReviewForm] = useState({ type:'review', rating:5, text:'', image:'' });
+      const [reviewFilter, setReviewFilter] = useState('all');
+      const [reviewComments, setReviewComments] = useState({});
       const [newMessage, setNewMessage] = useState('');
 
       const [showNotif, setShowNotif] = useState(false);
@@ -339,6 +391,7 @@
         setReservations(getLocalData('reservations', []));
         setChatMessages(getLocalData('chat_messages', []));
         setEventsList(getLocalData('events', []));
+        setReviews(getLocalData('reviews', []));
         setAnnouncements(getLocalData('announcements', []));
         setAdminCredentials(getLocalData('admin_settings', DEFAULT_ADMIN));
       };
@@ -412,12 +465,12 @@
           const unsub = ref.onSnapshot((snap) => {
             const linked = user.providerData.some(p => p.providerId === 'google.com');
             const email = user.providerData.find(p => p.providerId === 'google.com')?.email || '';
-            if (snap.exists) setProfile({ ...snap.data(), googleLinked:linked, googleEmail:email });
-            else { const d = { nickname:user.displayName || 'キャンパー', campStyle:'', prefecture:'', bio:'', avatarColor:'bg-pine-600', googleLinked:linked, googleEmail:email }; ref.set(d); setProfile(d); }
+            if (snap.exists) setProfile({ sns:{ instagram:'', x:'', line:'', website:'' }, ...snap.data(), googleLinked:linked, googleEmail:email });
+            else { const d = { nickname:user.displayName || 'キャンパー', campStyle:'', prefecture:'', bio:'', avatarColor:'bg-pine-600', googleLinked:linked, googleEmail:email, sns:{ instagram:'', x:'', line:'', website:'' } }; ref.set(d); setProfile(d); }
           });
           return () => unsub();
         } else {
-          setProfile(getLocalData(`profile_${user.uid}`, { nickname:'キャンパー', campStyle:'', prefecture:'', bio:'', avatarColor:'bg-pine-600', googleLinked:false, googleEmail:'' }));
+          setProfile(getLocalData(`profile_${user.uid}`, { nickname:'キャンパー', campStyle:'', prefecture:'', bio:'', avatarColor:'bg-pine-600', googleLinked:false, googleEmail:'', sns:{ instagram:'', x:'', line:'', website:'' } }));
         }
       }, [user, isDemo]);
 
@@ -428,6 +481,7 @@
         unsubs.push(pub().collection('reservations').onSnapshot(s => { const l=[]; s.forEach(d => l.push({ id:d.id, ...d.data() })); setReservations(l); }));
         unsubs.push(pub().collection('chat_messages').onSnapshot(s => { const l=[]; s.forEach(d => l.push({ id:d.id, ...d.data() })); l.sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)); setChatMessages(l); }));
         unsubs.push(pub().collection('events').onSnapshot(s => { const l=[]; s.forEach(d => l.push({ id:d.id, ...d.data() })); l.sort((a,b)=>b.id.localeCompare(a.id)); setEventsList(l); }));
+        unsubs.push(pub().collection('reviews').onSnapshot(s => { const l=[]; s.forEach(d => l.push({ id:d.id, ...d.data() })); l.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)); setReviews(l); }));
         unsubs.push(pub().collection('announcements').onSnapshot(s => { const l=[]; s.forEach(d => l.push({ id:d.id, ...d.data() })); l.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)); setAnnouncements(l); }));
         unsubs.push(dbObj.collection('artifacts').doc(currentAppId).collection('admins').onSnapshot(s => { const l=[]; s.forEach(d => l.push(d.id)); setAdminUids(l); }, () => {}));
         return () => unsubs.forEach(u => u());
@@ -560,6 +614,60 @@
         showAlert('イベントを削除しました。', 'success');
       }, 'ember');
 
+      /* ---- reviews / photos / info feed ---- */
+      const handleReviewImage = (file) => {
+        if (!file) return;
+        if (!file.type.startsWith('image/')) { showAlert('画像ファイルを選んでください。', 'error'); return; }
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const img = new Image();
+          img.onload = () => {
+            const MAX = 1280; let { width:w, height:h } = img;
+            if (w > MAX || h > MAX) { const r = Math.min(MAX/w, MAX/h); w = Math.round(w*r); h = Math.round(h*r); }
+            const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            setReviewForm(f => ({ ...f, image: canvas.toDataURL('image/jpeg', 0.82) }));
+          };
+          img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+      };
+      const handleCreateReview = (e) => {
+        e.preventDefault();
+        if (!reviewForm.text.trim() && !reviewForm.image) { showAlert('内容または写真を入力してください。', 'error'); return; }
+        if (reviewForm.type === 'photo' && !reviewForm.image) { showAlert('写真を選んでください。', 'error'); return; }
+        const payload = { id:'rv_'+Date.now(), type:reviewForm.type,
+          rating: reviewForm.type === 'review' ? Number(reviewForm.rating) : 0,
+          userId:user.uid, userName: isAdmin ? adminCredentials.adminName : (profile.nickname || 'キャンパー'),
+          avatarColor: isAdmin ? adminCredentials.adminAvatarColor : (profile.avatarColor || 'bg-pine-600'),
+          text:reviewForm.text, image:reviewForm.image || '', createdAt:Date.now(), likes:[], comments:[] };
+        if (isDemo) persistDemo('reviews', [payload, ...getLocalData('reviews', [])]);
+        else pub().collection('reviews').doc(payload.id).set(payload).catch(() => showAlert('投稿に失敗しました。', 'error'));
+        showAlert('投稿しました！🌲', 'success');
+        setShowReviewCreate(false); setReviewForm({ type:'review', rating:5, text:'', image:'' });
+      };
+      const updateReview = (id, mut) => {
+        const prev = reviews;
+        const updated = reviews.map(r => r.id === id ? mut(r) : r);
+        setReviews(updated);
+        if (isDemo) persistDemo('reviews', updated);
+        else { const t = updated.find(r => r.id === id); pub().collection('reviews').doc(id).update({ likes:t.likes, comments:t.comments })
+          .catch((err) => { console.error(err); setReviews(prev); showAlert('更新に失敗しました。', 'error'); }); }
+      };
+      const handleToggleReviewLike = (id) => updateReview(id, r => { const liked = r.likes?.includes(user?.uid); return { ...r, likes: liked ? r.likes.filter(u => u !== user.uid) : [...(r.likes||[]), user.uid] }; });
+      const handleAddReviewComment = (id) => {
+        const text = reviewComments[id];
+        if (!text || !text.trim()) return;
+        const c = { id:'rc_'+Date.now(), userId:user.uid, userName:profile.nickname || 'キャンパー', text, createdAt:Date.now() };
+        updateReview(id, r => ({ ...r, comments:[...(r.comments||[]), c] }));
+        setReviewComments(p => ({ ...p, [id]:'' }));
+      };
+      const handleDeleteReview = (id) => showConfirm('投稿を削除しますか？', 'この投稿を取り下げます。', () => {
+        if (isDemo) persistDemo('reviews', getLocalData('reviews', []).filter(r => r.id !== id));
+        else pub().collection('reviews').doc(id).delete();
+        showAlert('投稿を削除しました。', 'success');
+      }, 'ember');
+
       /* ---- announcements ---- */
       const handlePostAnnouncement = (e) => {
         e.preventDefault();
@@ -596,11 +704,21 @@
       const reservedMap = useMemo(() => { const m = {}; reservations.forEach(r => { (m[r.date] = m[r.date] || new Set()).add(r.siteType); }); return m; }, [reservations]);
       const myReservations = useMemo(() => reservations.filter(r => r.userId === user?.uid).length, [reservations, user]);
 
+      const filteredReviews = useMemo(() => {
+        const list = reviewFilter === 'all' ? reviews : reviews.filter(r => r.type === reviewFilter);
+        return [...list].sort((a,b) => (b.createdAt||0)-(a.createdAt||0));
+      }, [reviews, reviewFilter]);
+      const reviewStats = useMemo(() => {
+        const rated = reviews.filter(r => r.type === 'review' && r.rating > 0);
+        const avg = rated.length ? rated.reduce((s,r)=>s+r.rating,0)/rated.length : 0;
+        return { count: reviews.length, ratedCount: rated.length, avg };
+      }, [reviews]);
+
       const tabs = [
         { id:'calendar', label:'予約', Icon:Icons.Calendar },
+        { id:'reviews',  label:'口コミ', Icon:Icons.Star },
         { id:'events',   label:'コミュニティ', Icon:Icons.Community },
         { id:'chat',     label:'たきび', Icon:Icons.Fire },
-        { id:'profile',  label:'設定', Icon:Icons.User },
         { id:'guide',    label:'ガイド', Icon:Icons.Map },
       ];
 
@@ -723,7 +841,7 @@
                   <Icons.Bell className="w-5 h-5" />
                   {unreadCount > 0 && <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-ember-500 text-white text-[11px] font-bold flex items-center justify-center anim-pop">{unreadCount}</span>}
                 </button>
-                <div className="flex items-center gap-2 bg-white border border-bark-200 rounded-2xl pl-1.5 pr-3 py-1.5">
+                <button onClick={() => setActiveTab('profile')} className={`flex items-center gap-2 bg-white border rounded-2xl pl-1.5 pr-3 py-1.5 active:scale-95 transition ${activeTab==='profile' ? 'border-pine-500 ring-2 ring-pine-500/15' : 'border-bark-200'}`}>
                   <div className={`w-8 h-8 rounded-xl ${isAdmin ? adminCredentials.adminAvatarColor : (profile.avatarColor || 'bg-pine-600')} flex items-center justify-center text-white shrink-0`}>
                     {isAdmin ? <span className="text-sm">👑</span> : <Brand className="w-4 h-4" />}
                   </div>
@@ -731,7 +849,7 @@
                     <div className="text-[10px] font-bold text-bark-400">{isAdmin ? '管理者' : (profile.googleLinked ? 'Google連携' : 'ゲスト')}</div>
                     <div className="text-sm font-bold text-bark-900 mt-0.5 max-w-[120px] truncate">{isAdmin ? adminCredentials.adminName : (profile.nickname || 'ゲスト')}</div>
                   </div>
-                </div>
+                </button>
               </div>
             </div>
             {isDemo && (
@@ -922,6 +1040,138 @@
               </div>
             )}
 
+            {/* ---------------- REVIEWS / PHOTOS / INFO ---------------- */}
+            {activeTab === 'reviews' && (
+              <div className="space-y-5 anim-fade">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h2 className="font-display font-bold text-2xl text-bark-900">みんなの口コミ</h2>
+                    <p className="text-sm text-bark-500 font-medium mt-1">口コミ・写真・お役立ち情報をシェア。</p>
+                  </div>
+                  <button onClick={() => setShowReviewCreate(v => !v)} className="shrink-0 px-4 py-3 bg-pine-700 hover:bg-pine-600 text-white text-sm font-bold rounded-2xl flex items-center gap-2 shadow-soft active:scale-95 transition">
+                    <Icons.Plus className="w-5 h-5" /><span className="hidden sm:inline">投稿する</span>
+                  </button>
+                </div>
+
+                {/* rating summary */}
+                <div className="bg-pine-800 rounded-4xl p-5 sm:p-6 text-white shadow-lift flex items-center gap-5">
+                  <div className="text-center shrink-0">
+                    <div className="font-display font-bold text-4xl leading-none tabular-nums">{reviewStats.avg ? reviewStats.avg.toFixed(1) : '—'}</div>
+                    <div className="flex items-center gap-0.5 mt-1.5 justify-center text-ember-300">
+                      {[1,2,3,4,5].map(n => <Icons.Star key={n} filled={n <= Math.round(reviewStats.avg)} className="w-3.5 h-3.5" />)}
+                    </div>
+                  </div>
+                  <div className="h-12 w-px bg-pine-700"></div>
+                  <div className="min-w-0">
+                    <p className="font-bold text-lg leading-snug">キャンパーの評価</p>
+                    <p className="text-pine-200 text-sm font-medium">{reviewStats.ratedCount}件の口コミ・全{reviewStats.count}投稿</p>
+                  </div>
+                </div>
+
+                {/* composer */}
+                {showReviewCreate && (
+                  <form onSubmit={handleCreateReview} className="bg-white border border-bark-200 rounded-4xl p-5 sm:p-6 shadow-soft space-y-4 anim-fade">
+                    <div className="grid grid-cols-3 gap-2">
+                      {REVIEW_TYPES.map(t => { const IconC = Icons[t.icon]; const on = reviewForm.type===t.id; return (
+                        <button type="button" key={t.id} onClick={() => setReviewForm({ ...reviewForm, type:t.id })} className={`flex flex-col items-center gap-1.5 py-3 rounded-2xl border-2 transition ${on ? 'border-pine-600 bg-pine-50 text-pine-700' : 'border-bark-200 text-bark-500 hover:border-pine-300'}`}>
+                          <IconC className="w-5 h-5" /><span className="text-xs font-bold">{t.label}</span>
+                        </button>
+                      ); })}
+                    </div>
+                    <p className="text-xs text-bark-400 font-medium -mt-1">{REVIEW_TYPES.find(t=>t.id===reviewForm.type)?.hint}</p>
+
+                    {reviewForm.type === 'review' && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-bark-600">評価</span>
+                        <div className="flex items-center gap-1">
+                          {[1,2,3,4,5].map(n => (
+                            <button type="button" key={n} onClick={() => setReviewForm({ ...reviewForm, rating:n })} className={`p-0.5 active:scale-90 transition ${n <= reviewForm.rating ? 'text-ember-500' : 'text-bark-200'}`}><Icons.Star filled={n <= reviewForm.rating} className="w-7 h-7" /></button>
+                          ))}
+                        </div>
+                        <span className="text-sm font-bold text-bark-400 tabular-nums">{reviewForm.rating}.0</span>
+                      </div>
+                    )}
+
+                    <textarea rows="3" value={reviewForm.text} onChange={e => setReviewForm({ ...reviewForm, text:e.target.value })} placeholder={reviewForm.type==='info' ? '周辺のおすすめや持ち物のヒントなど…' : reviewForm.type==='photo' ? 'ひとことコメント（任意）…' : '泊まってみた感想を書いてください…'} className={`${inputCls} resize-none`} />
+
+                    {reviewForm.image ? (
+                      <div className="relative rounded-3xl overflow-hidden border border-bark-200">
+                        <img src={reviewForm.image} alt="添付画像" className="w-full max-h-64 object-cover" />
+                        <button type="button" onClick={() => setReviewForm({ ...reviewForm, image:'' })} className="absolute top-2 right-2 w-9 h-9 rounded-full bg-bark-900/70 text-white flex items-center justify-center backdrop-blur-sm"><Icons.X className="w-5 h-5" /></button>
+                      </div>
+                    ) : (
+                      <label className="flex items-center justify-center gap-2 py-4 rounded-3xl border-2 border-dashed border-bark-200 bg-canvas cursor-pointer hover:border-pine-400 transition text-bark-500">
+                        <Icons.Photo className="w-5 h-5" /><span className="text-sm font-bold">写真を追加{reviewForm.type==='photo' ? '' : '（任意）'}</span>
+                        <input type="file" accept="image/*" className="hidden" onChange={e => { handleReviewImage(e.target.files[0]); e.target.value=''; }} />
+                      </label>
+                    )}
+
+                    <div className="flex justify-end gap-2">
+                      <button type="button" onClick={() => setShowReviewCreate(false)} className="px-5 py-3 text-bark-500 font-bold">キャンセル</button>
+                      <button type="submit" className="px-6 py-3 bg-pine-700 hover:bg-pine-600 text-white font-bold rounded-2xl transition">投稿する</button>
+                    </div>
+                  </form>
+                )}
+
+                {/* filters */}
+                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar -mx-1 px-1">
+                  <button onClick={() => setReviewFilter('all')} className={`shrink-0 px-4 py-2 rounded-full text-sm font-bold border transition ${reviewFilter==='all' ? 'bg-pine-700 text-white border-pine-700' : 'bg-white text-bark-500 border-bark-200'}`}>すべて</button>
+                  {REVIEW_TYPES.map(t => (
+                    <button key={t.id} onClick={() => setReviewFilter(t.id)} className={`shrink-0 px-4 py-2 rounded-full text-sm font-bold border transition flex items-center gap-1.5 ${reviewFilter===t.id ? 'bg-pine-700 text-white border-pine-700' : 'bg-white text-bark-500 border-bark-200'}`}><span className={`w-1.5 h-1.5 rounded-full ${reviewFilter===t.id ? 'bg-white' : t.dot}`} />{t.label}</button>
+                  ))}
+                </div>
+
+                {/* feed */}
+                {filteredReviews.length === 0 ? (
+                  <div className="text-center py-16 bg-white border border-dashed border-bark-200 rounded-4xl text-bark-400 font-bold">まだ投稿がありません。<br/><span className="text-sm">最初の口コミ・写真を投稿してみましょう！</span></div>
+                ) : filteredReviews.map(r => {
+                  const t = REVIEW_TYPES.find(x => x.id === r.type) || REVIEW_TYPES[0];
+                  const liked = r.likes?.includes(user?.uid); const owner = r.userId===user?.uid || isAdmin;
+                  return (
+                    <div key={r.id} className="bg-white border border-bark-200 rounded-4xl shadow-soft overflow-hidden anim-fade">
+                      <div className="p-5 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Avatar color={r.avatarColor} name={r.userName} />
+                          <div className="min-w-0">
+                            <div className="font-bold text-bark-900 truncate">{r.userName}</div>
+                            <div className="text-xs font-bold text-bark-400">{relTime(r.createdAt)}</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className={`text-[11px] font-bold px-3 py-1 rounded-full border ${t.chip}`}>{t.label}</span>
+                          {owner && <button onClick={() => handleDeleteReview(r.id)} className="text-ember-500 p-1.5 hover:bg-ember-50 rounded-lg"><Icons.Trash className="w-5 h-5" /></button>}
+                        </div>
+                      </div>
+                      {r.type === 'review' && r.rating > 0 && (
+                        <div className="px-5 -mt-2 pb-1 flex items-center gap-1 text-ember-500">
+                          {[1,2,3,4,5].map(n => <Icons.Star key={n} filled={n <= r.rating} className="w-4 h-4" />)}
+                          <span className="text-sm font-bold text-bark-500 ml-1 tabular-nums">{r.rating}.0</span>
+                        </div>
+                      )}
+                      {r.text && <p className="px-5 pb-3 text-bark-700 font-medium leading-relaxed whitespace-pre-wrap">{r.text}</p>}
+                      {r.image && <img src={r.image} alt="投稿写真" loading="lazy" className="w-full border-y border-bark-100" />}
+                      <div className="px-5 py-3.5 flex items-center justify-between gap-3">
+                        <button onClick={() => handleToggleReviewLike(r.id)} className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl border text-sm font-bold transition ${liked ? 'bg-ember-50 border-ember-200 text-ember-500' : 'bg-white border-bark-200 text-bark-500'}`}><Icons.Heart filled={liked} className="w-4 h-4" />{r.likes?.length || 0}</button>
+                        <span className="text-xs font-bold text-bark-400">{r.comments?.length || 0} 件のコメント</span>
+                      </div>
+                      <div className="px-5 pb-5 space-y-3">
+                        {(r.comments || []).map(c => (
+                          <div key={c.id} className="bg-canvas border border-bark-100 rounded-2xl p-3.5">
+                            <div className="flex items-center justify-between mb-1"><span className="text-sm font-bold text-pine-700">{c.userName}</span><span className="text-[10px] font-bold text-bark-400">{relTime(c.createdAt)}</span></div>
+                            <p className="text-sm text-bark-600 font-medium whitespace-pre-wrap">{c.text}</p>
+                          </div>
+                        ))}
+                        <div className="flex gap-2">
+                          <input type="text" placeholder="コメントする…" value={reviewComments[r.id] || ''} onChange={e => setReviewComments({ ...reviewComments, [r.id]:e.target.value })} className={inputCls} />
+                          <button onClick={() => handleAddReviewComment(r.id)} className="shrink-0 px-5 bg-bark-800 hover:bg-bark-900 text-white font-bold rounded-2xl transition">送信</button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             {/* ---------------- EVENTS / COMMUNITY ---------------- */}
             {activeTab === 'events' && (
               <div className="space-y-5 anim-fade">
@@ -1095,17 +1345,28 @@
                   </div>
                 )}
 
-                {/* save data */}
+                {/* account */}
                 <div className="bg-white border border-bark-200 rounded-4xl p-6 shadow-soft space-y-4">
-                  <h3 className="font-display font-bold text-lg text-bark-900">🔒 セーブデータの同期</h3>
-                  <p className="text-sm text-bark-500 font-medium leading-relaxed">Googleアカウントを連携すると、予約やプロフィールをクラウドへ安全に同期できます。</p>
+                  <div className="flex items-center gap-2"><Icons.User className="w-5 h-5 text-pine-600" /><h3 className="font-display font-bold text-lg text-bark-900">アカウント</h3></div>
                   {profile.googleLinked ? (
-                    <div className="bg-canvas border border-bark-200 rounded-3xl p-4 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0"><div className="w-10 h-10 rounded-2xl bg-white border border-bark-200 flex items-center justify-center shrink-0"><Icons.Google className="w-5 h-5" /></div><div className="min-w-0"><p className="font-bold text-bark-900 text-sm">連携済み</p><p className="text-xs text-bark-400 font-medium truncate">{profile.googleEmail}</p></div></div>
-                      <button onClick={handleSignOut} className="shrink-0 px-4 py-2.5 bg-bark-100 hover:bg-bark-200 text-bark-700 rounded-xl text-sm font-bold transition">ログアウト</button>
-                    </div>
+                    <React.Fragment>
+                      <div className="bg-canvas border border-bark-200 rounded-3xl p-4 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-10 h-10 rounded-2xl bg-white border border-bark-200 flex items-center justify-center shrink-0"><Icons.Google className="w-5 h-5" /></div>
+                          <div className="min-w-0"><p className="font-bold text-bark-900 text-sm flex items-center gap-1.5">ログイン中<span className="w-2 h-2 rounded-full bg-pine-500"></span></p><p className="text-xs text-bark-400 font-medium truncate">{profile.googleEmail || 'Googleアカウント'}</p></div>
+                        </div>
+                        <button onClick={handleSignOut} className="shrink-0 px-4 py-2.5 bg-bark-100 hover:bg-bark-200 text-bark-700 rounded-xl text-sm font-bold transition">ログアウト</button>
+                      </div>
+                      <p className="text-xs text-bark-400 font-medium leading-relaxed">予約・プロフィールはこのアカウントでクラウドに同期されています。</p>
+                    </React.Fragment>
                   ) : (
-                    <button onClick={handleGoogleLink} className="w-full py-3.5 bg-white border border-bark-300 hover:border-pine-400 text-bark-800 font-bold rounded-2xl shadow-soft transition flex items-center justify-center gap-3"><Icons.Google className="w-5 h-5" />Googleでデータを同期</button>
+                    <React.Fragment>
+                      <div className="bg-canvas border border-bark-200 rounded-3xl p-4 flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-2xl ${profile.avatarColor || 'bg-pine-600'} flex items-center justify-center text-white shrink-0`}><Icons.User className="w-5 h-5" /></div>
+                        <div className="min-w-0"><p className="font-bold text-bark-900 text-sm">ゲストとして利用中</p><p className="text-xs text-bark-400 font-medium">ログインするとデータが保存・共有されます</p></div>
+                      </div>
+                      <button onClick={handleGoogleLink} className="w-full py-3.5 bg-white border border-bark-300 hover:border-pine-400 text-bark-800 font-bold rounded-2xl shadow-soft transition flex items-center justify-center gap-3"><Icons.Google className="w-5 h-5" />Googleでログイン</button>
+                    </React.Fragment>
                   )}
                   {isAdmin && (
                     <div className="pt-4 border-t border-bark-100 flex items-center justify-between gap-3">
@@ -1143,6 +1404,19 @@
                       </Field>
                     </div>
                     <Field label="自己紹介"><textarea rows="3" value={profile.bio} onChange={e => setProfile({ ...profile, bio:e.target.value })} placeholder="よろしくお願いします！" className={`${inputCls} resize-none`} style={(() => { const c = (profile.bio||'').startsWith('北広島') ? '#9D9080' : '#1C1813'; return { color:c, WebkitTextFillColor:c }; })()} /></Field>
+                    <div className="space-y-3 pt-1">
+                      <div className="flex items-center gap-2">
+                        <span className="block text-sm font-bold text-bark-600">SNS・リンク</span>
+                        <span className="text-xs font-medium text-bark-400">（任意）</span>
+                      </div>
+                      {SNS_DEFS.map(sns => { const IconC = Icons[sns.Icon]; const val = (profile.sns && profile.sns[sns.key]) || ''; return (
+                        <div key={sns.key} className="flex items-center gap-2.5 bg-canvas border border-bark-200 rounded-2xl px-3 py-2 focus-within:border-pine-500 focus-within:ring-4 focus-within:ring-pine-500/10 transition">
+                          <span className="w-8 h-8 rounded-xl bg-white border border-bark-200 flex items-center justify-center shrink-0" style={{ color: sns.color }}><IconC className="w-[18px] h-[18px]" /></span>
+                          <input type="text" value={val} onChange={e => setProfile({ ...profile, sns:{ ...(profile.sns||{}), [sns.key]:e.target.value } })} placeholder={`${sns.label}：${sns.ph}`} className="flex-1 min-w-0 bg-transparent outline-none text-bark-900 font-medium text-sm placeholder:text-bark-400" />
+                          {val && <a href={snsToUrl(sns.key, val)} target="_blank" rel="noopener noreferrer" className="shrink-0 text-pine-600 p-1" title="開く"><Icons.Right className="w-4 h-4" /></a>}
+                        </div>
+                      ); })}
+                    </div>
                     <button type="submit" className="w-full py-4 bg-pine-700 hover:bg-pine-600 text-white font-bold text-lg rounded-2xl shadow-soft transition">変更内容を保存する</button>
                   </form>
                 </div>

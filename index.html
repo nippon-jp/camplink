@@ -535,9 +535,15 @@
         showAlert('イベントを投稿しました！📣', 'success'); setShowEventCreate(false); setEventForm({ title:'', date:'', category:'昆虫採集', description:'', image:'' });
       };
       const updateEvent = (id, mut) => {
+        const prev = eventsList;
         const updated = eventsList.map(ev => ev.id === id ? mut(ev) : ev);
-        if (isDemo) persistDemo('events', updated);
-        else { const t = updated.find(ev => ev.id === id); pub().collection('events').doc(id).update({ likes:t.likes, participants:t.participants, comments:t.comments }); }
+        setEventsList(updated); // 即座に画面へ反映（楽観的更新）
+        if (isDemo) { persistDemo('events', updated); }
+        else {
+          const t = updated.find(ev => ev.id === id);
+          pub().collection('events').doc(id).update({ likes:t.likes, participants:t.participants, comments:t.comments })
+            .catch((err) => { console.error('event update failed:', err); setEventsList(prev); showAlert('更新に失敗しました。通信状況をご確認ください。', 'error'); });
+        }
       };
       const handleToggleLike = (id) => updateEvent(id, ev => { const liked = ev.likes?.includes(user?.uid); return { ...ev, likes: liked ? ev.likes.filter(u => u !== user.uid) : [...(ev.likes||[]), user.uid] }; });
       const handleToggleParticipant = (id) => { updateEvent(id, ev => { const p = ev.participants?.some(x => x.userId === user.uid); return { ...ev, participants: p ? ev.participants.filter(x => x.userId !== user.uid) : [...(ev.participants||[]), { userId:user.uid, userName:profile.nickname || 'キャンパー', avatarColor:profile.avatarColor || 'bg-pine-600' }] }; }); showAlert('参加状態を更新しました。', 'success'); };
@@ -1121,22 +1127,22 @@
                         ))}
                       </div>
                     </div>
-                    <Field label="ニックネーム"><input type="text" required value={profile.nickname} onChange={e => setProfile({ ...profile, nickname:e.target.value })} placeholder="例：カブトムシハンター" className={inputCls} style={{ color: (profile.nickname||'') === 'キャンパー' ? '#9D9080' : '#1C1813' }} /></Field>
+                    <Field label="ニックネーム"><input type="text" required value={profile.nickname} onChange={e => setProfile({ ...profile, nickname:e.target.value })} placeholder="例：カブトムシハンター" className={inputCls} style={(() => { const c = (profile.nickname||'') === 'キャンパー' ? '#9D9080' : '#1C1813'; return { color:c, WebkitTextFillColor:c }; })()} /></Field>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <Field label="キャンプスタイル">
-                        <select value={profile.campStyle} onChange={e => setProfile({ ...profile, campStyle:e.target.value })} className={inputCls} style={{ color: (profile.campStyle||'') === '' ? '#9D9080' : '#1C1813' }}>
+                        <select value={profile.campStyle} onChange={e => setProfile({ ...profile, campStyle:e.target.value })} className={inputCls} style={(() => { const c = (profile.campStyle||'') === '' ? '#9D9080' : '#1C1813'; return { color:c, WebkitTextFillColor:c }; })()}>
                           <option value="">選択してください</option>
                           <option>ファミリー（みんなで）</option><option>ソロ（ひとりで）</option><option>デュオ（ふたりで）</option><option>グループ</option>
                         </select>
                       </Field>
                       <Field label="お住まい">
-                        <select value={profile.prefecture} onChange={e => setProfile({ ...profile, prefecture:e.target.value })} className={inputCls} style={{ color: (profile.prefecture||'') === '' ? '#9D9080' : '#1C1813' }}>
+                        <select value={profile.prefecture} onChange={e => setProfile({ ...profile, prefecture:e.target.value })} className={inputCls} style={(() => { const c = (profile.prefecture||'') === '' ? '#9D9080' : '#1C1813'; return { color:c, WebkitTextFillColor:c }; })()}>
                           <option value="">都道府県を選択</option>
                           {PREFECTURES.map(p => <option key={p} value={p}>{p}</option>)}
                         </select>
                       </Field>
                     </div>
-                    <Field label="自己紹介"><textarea rows="3" value={profile.bio} onChange={e => setProfile({ ...profile, bio:e.target.value })} placeholder="よろしくお願いします！" className={`${inputCls} resize-none`} style={{ color: (profile.bio||'').startsWith('北広島') ? '#9D9080' : '#1C1813' }} /></Field>
+                    <Field label="自己紹介"><textarea rows="3" value={profile.bio} onChange={e => setProfile({ ...profile, bio:e.target.value })} placeholder="よろしくお願いします！" className={`${inputCls} resize-none`} style={(() => { const c = (profile.bio||'').startsWith('北広島') ? '#9D9080' : '#1C1813'; return { color:c, WebkitTextFillColor:c }; })()} /></Field>
                     <button type="submit" className="w-full py-4 bg-pine-700 hover:bg-pine-600 text-white font-bold text-lg rounded-2xl shadow-soft transition">変更内容を保存する</button>
                   </form>
                 </div>

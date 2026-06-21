@@ -257,6 +257,9 @@
       { key:'line',      label:'LINE',      Icon:'Line',      color:'#06C755', ph:'友だち追加URL' },
       { key:'website',   label:'ウェブサイト', Icon:'Globe',   color:'#2C5E45', ph:'https://…' },
     ];
+    // たきび広場：スタンプ＆リアクション
+    const CHAT_STAMPS = ['🔥','⛺','🏕️','🪵','🦌','🐛','🌲','☕','🍖','👍','🙏','🎉','😆','❤️','✨','🌙'];
+    const CHAT_REACTIONS = ['👍','🔥','😆','🙏','🎉','❤️'];
     const snsToUrl = (key, raw) => {
       if (!raw) return '';
       let v = String(raw).trim();
@@ -304,6 +307,16 @@
       const d = Math.floor(h / 24);
       if (d < 7) return `${d}日前`;
       return new Date(ts).toLocaleDateString('ja-JP', { month:'long', day:'numeric' });
+    };
+    // チャットの日付区切りラベル（今日 / 昨日 / M月D日（曜））
+    const dateLabel = (ts) => {
+      if (!ts) return '';
+      const d = new Date(ts); const now = new Date();
+      const day0 = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+      const diffDays = Math.round((day0(now) - day0(d)) / 86400000);
+      if (diffDays === 0) return '今日';
+      if (diffDays === 1) return '昨日';
+      return `${d.getMonth()+1}月${d.getDate()}日（${['日','月','火','水','木','金','土'][d.getDay()]}）`;
     };
 
     const SHORT_W = ['日','月','火','水','木','金','土'];
@@ -377,6 +390,15 @@
       const [reviewFilter, setReviewFilter] = useState('all');
       const [reviewComments, setReviewComments] = useState({});
       const [newMessage, setNewMessage] = useState('');
+      // たきび広場：拡張機能の状態
+      const [chatImage, setChatImage] = useState('');
+      const [replyTarget, setReplyTarget] = useState(null);
+      const [showStamps, setShowStamps] = useState(false);
+      const [reactionFor, setReactionFor] = useState(null);
+      const [mentionOpen, setMentionOpen] = useState(false);
+      const [moderation, setModeration] = useState({ guestBlock:false, slowModeSec:0, ngWords:[] });
+      const [modForm, setModForm] = useState({ guestBlock:false, slowModeSec:0, ngWords:'' });
+      const lastSentRef = useRef(0);
 
       const [showNotif, setShowNotif] = useState(false);
       const [annForm, setAnnForm] = useState({ title:'', body:'' });
@@ -590,6 +612,13 @@
         unsubs.push(pub().collection('reviews').onSnapshot(s => { const l=[]; s.forEach(d => l.push({ id:d.id, ...d.data() })); l.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)); setReviews(l); }));
         unsubs.push(pub().collection('announcements').onSnapshot(s => { const l=[]; s.forEach(d => l.push({ id:d.id, ...d.data() })); l.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)); setAnnouncements(l); }));
         unsubs.push(dbObj.collection('artifacts').doc(currentAppId).collection('admins').onSnapshot(s => { const l=[]; s.forEach(d => l.push(d.id)); setAdminUids(l); }, () => {}));
+        // たきび広場のモデレーション設定（公開データドキュメント）
+        unsubs.push(pub().onSnapshot(d => {
+          const m = (d.data() || {}).moderation || {};
+          const next = { guestBlock: !!m.guestBlock, slowModeSec: Number(m.slowModeSec) || 0, ngWords: Array.isArray(m.ngWords) ? m.ngWords : [] };
+          setModeration(next);
+          setModForm({ guestBlock: next.guestBlock, slowModeSec: next.slowModeSec, ngWords: next.ngWords.join('、') });
+        }, () => {}));
         return () => unsubs.forEach(u => u());
       }, [user, isDemo]);
 
@@ -663,19 +692,102 @@
           .then(() => showAlert('プロフィールをクラウドへ同期しました！', 'success')).catch(() => showAlert('保存できませんでした。', 'error'));
       };
 
-      /* ---- chat ---- */
+      /* ---- chat（たきび広場） ---- */
+      // 投稿前のモデレーションチェック（名前必須・ゲスト制限・NGワード・連投制限）
+      const chatGate = (text) => {
+        const nick = (profile.nickname || '').trim();
+        if (!isAdmin && (!nick || nick === 'キャンパー' || nick === 'ゲストキャンパー')) {
+          showAlert('チャットには表示名の設定が必要です。プロフィールで名前を決めてください。', 'error'); setActiveTab('profile'); return false;
+        }
+        if (!isAdmin && moderation.guestBlock && !profile.googleLinked) {
+          showAlert('現在、ゲストの投稿は制限されています。Googleでログインしてからご利用ください。', 'error'); return false;
+        }
+        if (text && moderation.ngWords.length) {
+          const low = text.toLowerCase();
+          if (moderation.ngWords.some(w => w && low.includes(w.toLowerCase()))) { showAlert('使用できない言葉が含まれています。', 'error'); return false; }
+        }
+        if (!isAdmin && moderation.slowModeSec > 0) {
+          const wait = moderation.slowModeSec * 1000 - (Date.now() - lastSentRef.current);
+          if (wait > 0) { showAlert(`連投制限中です。あと${Math.ceil(wait/1000)}秒お待ちください。`, 'error'); return false; }
+        }
+        return true;
+      };
+      const pushChat = (extra) => {
+        const base = { userId:user.uid, userName: isAdmin ? adminCredentials.adminName : (profile.nickname || 'キャンパー'),
+          avatarColor: isAdmin ? adminCredentials.adminAvatarColor : (profile.avatarColor || 'bg-pine-600'),
+          message:'', image:'', type:'text', replyTo:null, reactions:{}, pinned:false, createdAt:Date.now(), ...extra };
+        lastSentRef.current = Date.now();
+        if (isDemo) { base.id = 'chat_' + Date.now(); persistDemo('chat_messages', [...getLocalData('chat_messages', []), base]); }
+        else pub().collection('chat_messages').add(base).catch(() => showAlert('送信に失敗しました。', 'error'));
+      };
+      const handleChatImage = (file) => {
+        if (!file) return;
+        if (!file.type.startsWith('image/')) { showAlert('画像ファイルを選んでください。', 'error'); return; }
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const img = new Image();
+          img.onload = () => {
+            const MAX = 1280; let { width:w, height:h } = img;
+            if (w > MAX || h > MAX) { const r = Math.min(MAX/w, MAX/h); w = Math.round(w*r); h = Math.round(h*r); }
+            const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            setChatImage(canvas.toDataURL('image/jpeg', 0.82));
+          };
+          img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+      };
       const handleSendMessage = (e) => {
         e.preventDefault();
-        if (!newMessage.trim()) return;
-        const payload = { userId:user.uid, userName:profile.nickname || 'キャンパー', avatarColor:profile.avatarColor || 'bg-pine-600', message:newMessage, createdAt:Date.now() };
-        if (isDemo) { payload.id = 'chat_' + Date.now(); persistDemo('chat_messages', [...getLocalData('chat_messages', []), payload]); setNewMessage(''); }
-        else pub().collection('chat_messages').add(payload).then(() => setNewMessage('')).catch(() => showAlert('送信に失敗しました。', 'error'));
+        const text = newMessage.trim();
+        if (!text && !chatImage) return;
+        if (!chatGate(text)) return;
+        const reply = replyTarget ? { id:replyTarget.id, userName:replyTarget.userName, text:(replyTarget.message || (replyTarget.type==='stamp' ? replyTarget.stamp : '画像')).slice(0,60) } : null;
+        pushChat({ message:text, image:chatImage || '', replyTo:reply });
+        setNewMessage(''); setChatImage(''); setReplyTarget(null); setShowStamps(false); setMentionOpen(false);
+      };
+      const sendStamp = (stamp) => {
+        if (!chatGate('')) return;
+        pushChat({ type:'stamp', stamp });
+        setShowStamps(false); setReplyTarget(null);
+      };
+      const toggleReaction = (msg, emoji) => {
+        const reactions = { ...(msg.reactions || {}) };
+        const arr = Array.isArray(reactions[emoji]) ? [...reactions[emoji]] : [];
+        const i = arr.indexOf(user.uid);
+        if (i >= 0) arr.splice(i, 1); else arr.push(user.uid);
+        if (arr.length) reactions[emoji] = arr; else delete reactions[emoji];
+        if (isDemo) persistDemo('chat_messages', getLocalData('chat_messages', []).map(c => c.id === msg.id ? { ...c, reactions } : c));
+        else pub().collection('chat_messages').doc(msg.id).update({ reactions }).catch(() => showAlert('リアクションに失敗しました。', 'error'));
+        setReactionFor(null);
+      };
+      const togglePin = (msg) => {
+        const pinned = !msg.pinned;
+        if (isDemo) persistDemo('chat_messages', getLocalData('chat_messages', []).map(c => c.id === msg.id ? { ...c, pinned } : c));
+        else pub().collection('chat_messages').doc(msg.id).update({ pinned }).catch(() => showAlert('ピン留めに失敗しました。', 'error'));
+        showAlert(pinned ? 'メッセージをピン留めしました。' : 'ピン留めを解除しました。', 'success');
+      };
+      const insertMention = (name) => {
+        const v = newMessage.replace(/@[^\s@]*$/, '') + '@' + name + ' ';
+        setNewMessage(v); setMentionOpen(false);
+      };
+      const handleSaveModeration = () => {
+        const ngWords = modForm.ngWords.split(/[、,\n]/).map(s => s.trim()).filter(Boolean);
+        const moderation = { guestBlock: !!modForm.guestBlock, slowModeSec: Math.max(0, Number(modForm.slowModeSec) || 0), ngWords };
+        if (isDemo) { setModeration(moderation); showAlert('（おためし）モデレーション設定を保存しました。', 'success'); return; }
+        pub().set({ moderation }, { merge:true }).then(() => showAlert('モデレーション設定を保存しました。', 'success')).catch(() => showAlert('保存に失敗しました。管理者UIDをルールに登録してください。', 'error'));
       };
       const handleDeleteChat = (id) => showConfirm('メッセージを削除しますか？', 'このチャットメッセージを削除します。', () => {
         if (isDemo) persistDemo('chat_messages', getLocalData('chat_messages', []).filter(c => c.id !== id));
         else pub().collection('chat_messages').doc(id).delete();
         showAlert('メッセージを削除しました。', 'success');
       }, 'ember');
+      // @メンションをハイライト表示
+      const renderMsgText = (text, mine) => (text || '').split(/(@[^\s@]+)/g).map((part, i) =>
+        part.startsWith('@')
+          ? <span key={i} className={`font-bold ${mine ? 'text-pine-100 underline' : 'text-pine-600'}`}>{part}</span>
+          : <React.Fragment key={i}>{part}</React.Fragment>
+      );
 
       /* ---- reservations ---- */
       const handleSaveReservation = (e) => {
@@ -1443,30 +1555,142 @@
                   <div className="flex items-center gap-2.5"><div className="w-10 h-10 rounded-2xl bg-ember-50 text-ember-500 flex items-center justify-center"><Icons.Fire className="w-5 h-5" /></div><div><h3 className="font-display font-bold text-lg text-bark-900 leading-tight">たきび広場</h3><p className="text-xs text-bark-400 font-bold">キャンパー同士の雑談・連絡板</p></div></div>
                   <span className="text-xs font-bold text-bark-400 bg-canvas border border-bark-200 px-3 py-1.5 rounded-full">{chatMessages.length}件</span>
                 </div>
-                <div ref={chatScrollRef} className="flex-1 overflow-y-auto scroll-soft p-4 sm:p-5 space-y-4 bg-canvas/40">
+
+                {/* ピン留め */}
+                {chatMessages.some(m => m.pinned) && (
+                  <div className="px-4 sm:px-5 py-2.5 bg-ember-50/70 border-b border-ember-100 shrink-0 space-y-1.5 max-h-32 overflow-y-auto scroll-soft">
+                    {chatMessages.filter(m => m.pinned).map(m => (
+                      <div key={m.id} className="flex items-center gap-2 text-sm">
+                        <Icons.Pin className="w-4 h-4 text-ember-500 shrink-0" />
+                        <span className="font-bold text-ember-700 shrink-0">{m.userName}:</span>
+                        <span className="text-bark-600 font-medium truncate flex-1">{m.type==='stamp' ? m.stamp : (m.message || '画像')}</span>
+                        {isAdmin && <button onClick={() => togglePin(m)} className="shrink-0 text-ember-500 hover:bg-ember-100 rounded p-0.5"><Icons.X className="w-3.5 h-3.5" /></button>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div ref={chatScrollRef} className="flex-1 overflow-y-auto scroll-soft p-4 sm:p-5 space-y-1 bg-canvas/40">
                   {chatMessages.length === 0 ? (
                     <div className="text-center py-16 text-bark-400 font-bold">まだ会話はありません。<br/><span className="text-sm">たきびの周りで挨拶するようにメッセージをどうぞ！</span></div>
-                  ) : chatMessages.map(m => {
+                  ) : chatMessages.map((m, idx) => {
                     const mine = m.userId===user?.uid;
+                    const prev = chatMessages[idx-1];
+                    const showDate = !prev || dateLabel(prev.createdAt) !== dateLabel(m.createdAt);
+                    const reactions = m.reactions || {};
+                    const reactKeys = Object.keys(reactions).filter(k => (reactions[k]||[]).length);
                     return (
-                      <div key={m.id} className={`flex items-end gap-2.5 ${mine ? 'flex-row-reverse' : ''}`}>
-                        <Avatar color={m.avatarColor} name={m.userName} size="w-9 h-9" text="text-sm" />
-                        <div className={`flex flex-col max-w-[76%] ${mine ? 'items-end' : 'items-start'}`}>
-                          <span className="text-[11px] font-bold text-bark-400 mb-1 px-1">{m.userName}{mine && '（あなた）'}</span>
-                          <div className="flex items-end gap-1.5">
-                            {(mine || isAdmin) && <button onClick={() => handleDeleteChat(m.id)} className="text-ember-400 p-1 order-last hover:bg-ember-50 rounded-lg"><Icons.Trash className="w-4 h-4" /></button>}
-                            <div className={`px-4 py-3 text-[15px] leading-relaxed font-medium ${mine ? 'bg-pine-700 text-white rounded-2xl rounded-br-md' : 'bg-white border border-bark-200 text-bark-800 rounded-2xl rounded-bl-md'}`}><p className="whitespace-pre-wrap break-words">{m.message}</p></div>
+                      <React.Fragment key={m.id}>
+                        {showDate && (
+                          <div className="flex justify-center py-3"><span className="text-[11px] font-bold text-bark-500 bg-bark-100/80 px-3 py-1 rounded-full">{dateLabel(m.createdAt)}</span></div>
+                        )}
+                        <div className={`flex items-end gap-2.5 pt-1 ${mine ? 'flex-row-reverse' : ''}`}>
+                          <Avatar color={m.avatarColor} name={m.userName} size="w-9 h-9" text="text-sm" />
+                          <div className={`flex flex-col max-w-[78%] ${mine ? 'items-end' : 'items-start'}`}>
+                            <span className="text-[11px] font-bold text-bark-400 mb-1 px-1 flex items-center gap-1">{m.pinned && <Icons.Pin className="w-3 h-3 text-ember-400" />}{m.userName}{mine && '（あなた）'}</span>
+
+                            {m.replyTo && (
+                              <div className={`mb-1 px-3 py-1.5 rounded-xl border-l-2 text-xs max-w-full ${mine ? 'bg-pine-50 border-pine-400' : 'bg-bark-50 border-bark-300'}`}>
+                                <span className="font-bold text-bark-500">{m.replyTo.userName}</span>
+                                <span className="text-bark-400 ml-1 truncate">{m.replyTo.text}</span>
+                              </div>
+                            )}
+
+                            <div className="flex items-end gap-1.5 group">
+                              {/* アクション */}
+                              <div className={`flex items-center gap-0.5 self-center ${mine ? 'order-last' : ''}`}>
+                                <div className="relative">
+                                  <button onClick={() => setReactionFor(reactionFor === m.id ? null : m.id)} className="text-bark-300 hover:text-pine-600 p-1 rounded-lg hover:bg-bark-100/60"><Icons.Spark className="w-4 h-4" /></button>
+                                  {reactionFor === m.id && (
+                                    <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 z-30 flex gap-0.5 bg-white border border-bark-200 rounded-2xl shadow-lift px-1.5 py-1 anim-pop">
+                                      {CHAT_REACTIONS.map(e => <button key={e} onClick={() => toggleReaction(m, e)} className="w-8 h-8 text-lg hover:bg-bark-100 rounded-xl transition active:scale-90">{e}</button>)}
+                                    </div>
+                                  )}
+                                </div>
+                                <button onClick={() => { setReplyTarget(m); }} className="text-bark-300 hover:text-pine-600 p-1 rounded-lg hover:bg-bark-100/60"><svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" /></svg></button>
+                                {isAdmin && <button onClick={() => togglePin(m)} className={`p-1 rounded-lg hover:bg-bark-100/60 ${m.pinned ? 'text-ember-500' : 'text-bark-300 hover:text-ember-500'}`}><Icons.Pin className="w-4 h-4" /></button>}
+                                {(mine || isAdmin) && <button onClick={() => handleDeleteChat(m.id)} className="text-bark-300 hover:text-ember-500 p-1 rounded-lg hover:bg-bark-100/60"><Icons.Trash className="w-4 h-4" /></button>}
+                              </div>
+
+                              {m.type === 'stamp' ? (
+                                <span className="text-5xl leading-none select-none">{m.stamp}</span>
+                              ) : (
+                                <div className={`overflow-hidden ${mine ? 'rounded-2xl rounded-br-md' : 'rounded-2xl rounded-bl-md'} ${m.image && !m.message ? '' : (mine ? 'bg-pine-700 text-white' : 'bg-white border border-bark-200 text-bark-800')}`}>
+                                  {m.image && <img src={m.image} alt="添付画像" loading="lazy" className="w-full max-w-[260px] max-h-72 object-cover" />}
+                                  {m.message && <p className={`px-4 py-3 text-[15px] leading-relaxed font-medium whitespace-pre-wrap break-words ${m.image ? (mine ? 'bg-pine-700 text-white' : 'bg-white text-bark-800') : ''}`}>{renderMsgText(m.message, mine)}</p>}
+                                </div>
+                              )}
+                            </div>
+
+                            {reactKeys.length > 0 && (
+                              <div className={`flex flex-wrap gap-1 mt-1.5 ${mine ? 'justify-end' : ''}`}>
+                                {reactKeys.map(e => {
+                                  const on = (reactions[e]||[]).includes(user?.uid);
+                                  return <button key={e} onClick={() => toggleReaction(m, e)} className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border transition ${on ? 'bg-pine-50 border-pine-300 text-pine-700' : 'bg-white border-bark-200 text-bark-500'}`}>{e}<span>{(reactions[e]||[]).length}</span></button>;
+                                })}
+                              </div>
+                            )}
+
+                            <span className="text-[10px] font-bold text-bark-300 mt-1 px-1">{m.createdAt ? new Date(m.createdAt).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}) : ''}</span>
                           </div>
-                          <span className="text-[10px] font-bold text-bark-300 mt-1 px-1">{m.createdAt ? new Date(m.createdAt).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}) : ''}</span>
                         </div>
-                      </div>
+                      </React.Fragment>
                     );
                   })}
                 </div>
-                <form onSubmit={handleSendMessage} className="p-3.5 border-t border-bark-100 flex gap-2 shrink-0">
-                  <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="メッセージを送信…" className={inputCls} />
-                  <button type="submit" disabled={!newMessage.trim()} className="shrink-0 w-14 bg-pine-700 hover:bg-pine-600 disabled:bg-bark-200 disabled:text-bark-400 text-white font-bold rounded-2xl transition flex items-center justify-center"><Icons.Right className="w-5 h-5" /></button>
-                </form>
+                <div className="border-t border-bark-100 shrink-0">
+                  {/* 返信プレビュー */}
+                  {replyTarget && (
+                    <div className="px-4 pt-2.5 flex items-center gap-2">
+                      <div className="flex-1 min-w-0 bg-pine-50 border-l-2 border-pine-400 rounded-lg px-3 py-1.5">
+                        <p className="text-[11px] font-bold text-pine-600">{replyTarget.userName} に返信</p>
+                        <p className="text-xs text-bark-500 font-medium truncate">{replyTarget.type==='stamp' ? replyTarget.stamp : (replyTarget.message || '画像')}</p>
+                      </div>
+                      <button onClick={() => setReplyTarget(null)} className="shrink-0 w-8 h-8 rounded-full bg-bark-100 text-bark-500 flex items-center justify-center"><Icons.X className="w-4 h-4" /></button>
+                    </div>
+                  )}
+                  {/* 画像プレビュー */}
+                  {chatImage && (
+                    <div className="px-4 pt-2.5">
+                      <div className="relative inline-block">
+                        <img src={chatImage} alt="添付" className="h-24 rounded-2xl border border-bark-200 object-cover" />
+                        <button onClick={() => setChatImage('')} className="absolute -top-2 -right-2 w-7 h-7 rounded-full bg-bark-900/80 text-white flex items-center justify-center"><Icons.X className="w-4 h-4" /></button>
+                      </div>
+                    </div>
+                  )}
+                  {/* スタンプパレット */}
+                  {showStamps && (
+                    <div className="px-4 pt-3">
+                      <div className="grid grid-cols-8 gap-1 bg-canvas border border-bark-200 rounded-2xl p-2 anim-pop">
+                        {CHAT_STAMPS.map(s => <button key={s} onClick={() => sendStamp(s)} className="aspect-square text-2xl hover:bg-white rounded-xl transition active:scale-90">{s}</button>)}
+                      </div>
+                    </div>
+                  )}
+                  {/* メンション候補 */}
+                  {mentionOpen && (() => {
+                    const q = (newMessage.match(/@([^\s@]*)$/) || [null, ''])[1].toLowerCase();
+                    const names = [...new Set(chatMessages.map(m => m.userName).filter(n => n && n !== (profile.nickname||'')))].filter(n => n.toLowerCase().includes(q)).slice(0, 6);
+                    if (!names.length) return null;
+                    return (
+                      <div className="px-4 pt-3">
+                        <div className="bg-white border border-bark-200 rounded-2xl shadow-soft overflow-hidden anim-pop">
+                          {names.map(n => <button key={n} onClick={() => insertMention(n)} className="w-full text-left px-4 py-2.5 text-sm font-bold text-bark-700 hover:bg-pine-50 flex items-center gap-2"><span className="text-pine-500">@</span>{n}</button>)}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  <form onSubmit={handleSendMessage} className="p-3.5 flex items-center gap-2">
+                    <label className="shrink-0 w-11 h-11 rounded-2xl bg-canvas border border-bark-200 text-bark-500 flex items-center justify-center cursor-pointer hover:border-pine-400 transition">
+                      <Icons.Photo className="w-5 h-5" />
+                      <input type="file" accept="image/*" className="hidden" onChange={e => { handleChatImage(e.target.files[0]); e.target.value=''; }} />
+                    </label>
+                    <button type="button" onClick={() => { setShowStamps(s => !s); setMentionOpen(false); }} className={`shrink-0 w-11 h-11 rounded-2xl border flex items-center justify-center transition ${showStamps ? 'bg-ember-50 border-ember-300 text-ember-500' : 'bg-canvas border-bark-200 text-bark-500 hover:border-pine-400'}`}><span className="text-lg">😊</span></button>
+                    <input type="text" value={newMessage}
+                      onChange={e => { const v = e.target.value; setNewMessage(v); setMentionOpen(/@[^\s@]*$/.test(v)); if (showStamps) setShowStamps(false); }}
+                      placeholder="メッセージを送信…（@で宛先）" className={inputCls} />
+                    <button type="submit" disabled={!newMessage.trim() && !chatImage} className="shrink-0 w-14 h-12 bg-pine-700 hover:bg-pine-600 disabled:bg-bark-200 disabled:text-bark-400 text-white font-bold rounded-2xl transition flex items-center justify-center"><Icons.Right className="w-5 h-5" /></button>
+                  </form>
+                </div>
               </div>
             )}
 
@@ -1538,6 +1762,25 @@
                         })}
                       </div>
                     )}
+                  </div>
+                )}
+
+                {isAdmin && (
+                  <div className="bg-white border border-bark-200 rounded-4xl p-6 shadow-soft space-y-4">
+                    <div className="flex items-center gap-2"><Icons.Fire className="w-5 h-5 text-ember-500" /><h3 className="font-display font-bold text-lg text-bark-900">たきび広場のモデレーション</h3></div>
+                    <label className="flex items-center justify-between gap-3 bg-canvas border border-bark-200 rounded-2xl px-4 py-3">
+                      <div><p className="text-sm font-bold text-bark-700">ゲストの投稿を禁止</p><p className="text-xs text-bark-400 font-medium">Google未ログインの人は投稿できなくなります</p></div>
+                      <button type="button" onClick={() => setModForm(f => ({ ...f, guestBlock: !f.guestBlock }))} className={`shrink-0 w-12 h-7 rounded-full transition relative ${modForm.guestBlock ? 'bg-pine-600' : 'bg-bark-300'}`}><span className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow transition-all ${modForm.guestBlock ? 'left-[1.375rem]' : 'left-0.5'}`}></span></button>
+                    </label>
+                    <label className="block">
+                      <span className="block text-sm font-bold text-bark-600 mb-2">連投制限（秒）<span className="font-medium text-bark-400 text-xs">0で無効</span></span>
+                      <input type="number" min="0" max="300" value={modForm.slowModeSec} onChange={e => setModForm(f => ({ ...f, slowModeSec: e.target.value }))} className={inputCls} />
+                    </label>
+                    <label className="block">
+                      <span className="block text-sm font-bold text-bark-600 mb-2">NGワード<span className="font-medium text-bark-400 text-xs">読点（、）かカンマ区切り</span></span>
+                      <textarea rows="2" value={modForm.ngWords} onChange={e => setModForm(f => ({ ...f, ngWords: e.target.value }))} placeholder="例：宣伝、URL、悪口" className={`${inputCls} resize-none`} />
+                    </label>
+                    <button type="button" onClick={handleSaveModeration} className="w-full py-3.5 bg-pine-700 hover:bg-pine-600 text-white font-bold rounded-2xl transition">モデレーション設定を保存</button>
                   </div>
                 )}
 

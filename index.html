@@ -245,7 +245,7 @@
       { id:'site',             icon:'⛺', short:'キャンプサイト',       name:'キャンプサイト（フリー芝生）',   desc:'全面芝生のプライベートサイト',           dot:'bg-pine-500',   chip:'bg-pine-50 text-pine-700 border-pine-200' },
     ];
 
-    const DEFAULT_ADMIN = { adminId:'camplink_owner', adminPassword:'hide31415926', adminName:'管理人', adminAvatarColor:'bg-pine-700' };
+    const ADMIN_IDENTITY = { adminName:'管理人', adminAvatarColor:'bg-pine-700' };
     const AVATAR_COLORS = ['bg-pine-600','bg-teal-600','bg-indigo-600','bg-ember-500','bg-bark-700'];
 
     const PREFECTURES = ['北海道','青森県','岩手県','宮城県','秋田県','山形県','福島県','茨城県','栃木県','群馬県','埼玉県','千葉県','東京都','神奈川県','新潟県','富山県','石川県','福井県','山梨県','長野県','岐阜県','静岡県','愛知県','三重県','滋賀県','京都府','大阪府','兵庫県','奈良県','和歌山県','鳥取県','島根県','岡山県','広島県','山口県','徳島県','香川県','愛媛県','高知県','福岡県','佐賀県','長崎県','熊本県','大分県','宮崎県','鹿児島県','沖縄県'];
@@ -360,14 +360,12 @@
 
       const [profile, setProfile] = useState({ nickname:'', campStyle:'', prefecture:'', bio:'', avatarColor:'bg-pine-600', googleLinked:false, googleEmail:'', sns:{ instagram:'', x:'', line:'', website:'' } });
 
-      const [isAdminPassword, setIsAdminPassword] = useState(false);
       const [adminUids, setAdminUids] = useState([]);
-      const isAdmin = isAdminPassword || (!!user && adminUids.includes(user.uid));
-      const [showAdminModal, setShowAdminModal] = useState(false);
-      const [adminIdInput, setAdminIdInput] = useState('');
-      const [adminPwInput, setAdminPwInput] = useState('');
-      const [adminCredentials, setAdminCredentials] = useState(() => getLocalData('admin_settings', DEFAULT_ADMIN));
-      const [adminForm, setAdminForm] = useState(() => getLocalData('admin_settings', DEFAULT_ADMIN));
+      const [demoAdmin, setDemoAdmin] = useState(false);
+      // 管理者＝Firestoreの admins コレクションに登録されたUID（Googleログイン）一本に統一。
+      // パスワード方式は廃止。おためしモードはクラウドが無いため、プレビュー用トグルのみ許可。
+      const isAdmin = (!!user && adminUids.includes(user.uid)) || (isDemo && demoAdmin);
+      const adminCredentials = ADMIN_IDENTITY;
 
       const [reservations, setReservations] = useState([]);
       const [chatMessages, setChatMessages] = useState([]);
@@ -417,19 +415,6 @@
 
       const enterApp = () => { sessionStorage.setItem('cl_splash','1'); setShowSplash(false); };
 
-      // 管理者の隠し入口：URLに ?admin が付いていたら起動時にログイン画面を開く
-      useEffect(() => {
-        try {
-          const q = window.location.search + ' ' + window.location.hash;
-          if (/(^|[?&#])admin\b/i.test(q)) {
-            setShowSplash(false);
-            sessionStorage.setItem('cl_splash','1');
-            setAdminForm(adminCredentials);
-            setShowAdminModal(true);
-          }
-        } catch (e) {}
-      }, []);
-
       /* ---- demo data loader (no polling; storage event + explicit refresh) ---- */
       const loadDemo = () => {
         setReservations(getLocalData('reservations', []));
@@ -437,20 +422,8 @@
         setEventsList(getLocalData('events', []));
         setReviews(getLocalData('reviews', []));
         setAnnouncements(getLocalData('announcements', []));
-        setAdminCredentials(getLocalData('admin_settings', DEFAULT_ADMIN));
       };
       const persistDemo = (key, val) => { setLocalData(key, val); loadDemo(); };
-
-      /* ---- admin ---- */
-      const handleAdminLogin = (e) => {
-        e.preventDefault();
-        if (adminIdInput === adminCredentials.adminId && adminPwInput === adminCredentials.adminPassword) {
-          setIsAdminPassword(true); setShowAdminModal(false); setAdminIdInput(''); setAdminPwInput('');
-          setAdminForm(adminCredentials);
-          showAlert(`管理者「${adminCredentials.adminName}」でログインしました。`, 'success');
-        } else { showAlert('IDまたはパスワードが違います。', 'error'); }
-      };
-      const handleAdminLogout = () => { setIsAdminPassword(false); showAlert('管理者モードを終了しました。', 'info'); };
 
       /* ---- 登録端末の管理（ロックされた人の救済） ---- */
       const loadDevices = async () => {
@@ -472,14 +445,6 @@
           showAlert('端末の登録を解除しました。', 'success');
         } catch (e) { console.error('deleteDevice error:', e); showAlert('解除に失敗しました。管理者UIDをルールに登録してください。', 'error'); }
       }, 'ember');
-      const handleUpdateAdmin = (e) => {
-        e.preventDefault();
-        // 管理者の認証情報は端末内（localStorage）に保存する。
-        // パスワードを公開クラウドに置かないため＆ルールに依存せず確実に保存するため。
-        setLocalData('admin_settings', adminForm);
-        setAdminCredentials(adminForm);
-        showAlert('管理者設定を保存しました。', 'success');
-      };
 
       /* ---- auth ---- */
       useEffect(() => {
@@ -505,7 +470,12 @@
               } catch (re) {
                 console.error('getRedirectResult error:', re);
                 const code = (re && (re.code || re.message)) || '';
-                if (/disallowed_useragent|403/.test(String(code))) showAlert('このブラウザではGoogleログインがブロックされました。Safari / Chrome で開いてお試しください。', 'error');
+                // そのGoogleアカウントが既に別ユーザーとして存在する場合は、連携ではなく既存アカウントへログイン
+                if (/credential-already-in-use|email-already-in-use|account-exists/.test(String(code)) && re.credential) {
+                  try { const r2 = await authObj.signInWithCredential(re.credential); redirectUser = r2.user; showAlert('既存のGoogleアカウントでログインしました。', 'success'); }
+                  catch (e3) { showAlert('既存アカウントへのログインに失敗しました（' + (e3.code || '') + '）', 'error'); }
+                }
+                else if (/disallowed_useragent|403/.test(String(code))) showAlert('このブラウザではGoogleログインがブロックされました。Safari / Chrome で開いてお試しください。', 'error');
                 else if (/unauthorized-domain/.test(code)) showAlert('このドメインはFirebaseで未許可です（承認済みドメインに追加してください）。', 'error');
                 else if (code) showAlert('Googleログインエラー（' + code + '）', 'error');
               }
@@ -576,8 +546,10 @@
               setDeviceState('ok');
             } else if (snap.data().uid === user.uid) {
               setDeviceState('ok');                            // 同じアカウントの再訪問
+            } else if (!user.isAnonymous) {
+              setDeviceState('ok');                            // Googleログイン済＝正規ユーザーはブロックしない
             } else {
-              setDeviceState('duplicate');                     // 別UIDでの重複登録→ブロック
+              setDeviceState('duplicate');                     // 匿名UIDでの重複登録→ブロック
             }
           } catch (e) {
             console.error('device check error:', e);
@@ -674,6 +646,11 @@
           } else { await authObj.signInWithPopup(provider); showAlert('Googleでサインインしました。', 'success'); }
         } catch (e) {
           console.error('Google login error:', e);
+          // そのGoogleアカウントが既に別ユーザーとして存在する場合：連携ではなく既存アカウントへログイン
+          if (e && /credential-already-in-use|email-already-in-use|account-exists/.test(e.code || '') && e.credential) {
+            try { await authObj.signInWithCredential(e.credential); showAlert('既存のGoogleアカウントでログインしました。', 'success'); return; }
+            catch (e3) { showAlert(googleErrorMessage(e3), 'error'); return; }
+          }
           // popup が使えない環境なら redirect に自動フォールバック
           if (e && /popup|operation-not-supported|web-storage/.test(e.code || '')) {
             try { if (user.isAnonymous) await user.linkWithRedirect(provider); else await authObj.signInWithRedirect(provider); return; } catch (e2) { showAlert(googleErrorMessage(e2), 'error'); return; }
@@ -1049,23 +1026,6 @@
                     <button onClick={confirmModal.onConfirm} className={`flex-1 py-3.5 text-white font-bold rounded-2xl transition ${confirmModal.tone==='ember' ? 'bg-ember-500 hover:bg-ember-600' : 'bg-pine-700 hover:bg-pine-600'}`}>実行する</button>
                   </div>
                 </div>
-              </div>
-            </div>
-          )}
-
-          {/* ================= Admin login ================= */}
-          {showAdminModal && (
-            <div className="fixed inset-0 z-[80] bg-bark-900/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-6">
-              <div className="bg-white w-full sm:max-w-md rounded-t-4xl sm:rounded-4xl overflow-hidden shadow-lift anim-sheet">
-                <div className="flex justify-between items-center px-7 py-5 border-b border-bark-100">
-                  <div className="flex items-center gap-2"><span className="text-lg">🔐</span><h3 className="font-display font-bold text-xl text-bark-900">管理者ログイン</h3></div>
-                  <button onClick={() => setShowAdminModal(false)} className="w-9 h-9 rounded-xl bg-bark-100 text-bark-500 flex items-center justify-center"><Icons.X className="w-5 h-5" /></button>
-                </div>
-                <form onSubmit={handleAdminLogin} className="p-7 space-y-5">
-                  <Field label="管理者ID"><input type="text" required placeholder="ID" value={adminIdInput} onChange={e => setAdminIdInput(e.target.value)} className={inputCls} /></Field>
-                  <Field label="パスワード"><input type="password" required placeholder="パスワード" value={adminPwInput} onChange={e => setAdminPwInput(e.target.value)} className={inputCls} /></Field>
-                  <button type="submit" className="w-full py-3.5 bg-pine-700 hover:bg-pine-600 text-white font-bold rounded-2xl transition">ログイン</button>
-                </form>
               </div>
             </div>
           )}
@@ -1699,20 +1659,13 @@
               <div className="max-w-xl mx-auto space-y-5 anim-fade">
 
                 {isAdmin && (
-                  <div className="bg-pine-800 text-white rounded-4xl p-6 shadow-lift space-y-6">
-                    <div className="flex items-center gap-2"><span className="text-xl">👑</span><h3 className="font-display font-bold text-xl">管理者システム設定</h3></div>
-                    <form onSubmit={handleUpdateAdmin} className="space-y-4">
-                      <div className="grid grid-cols-2 gap-3">
-                        <label className="block"><span className="block text-xs font-bold text-pine-200 mb-1.5">管理者ID</span><input type="text" required value={adminForm.adminId} onChange={e => setAdminForm({ ...adminForm, adminId:e.target.value })} className="w-full px-4 py-3 bg-pine-900/60 border border-pine-700 rounded-2xl text-white font-bold outline-none focus:border-pine-400" /></label>
-                        <label className="block"><span className="block text-xs font-bold text-pine-200 mb-1.5">パスワード</span><input type="password" required value={adminForm.adminPassword} onChange={e => setAdminForm({ ...adminForm, adminPassword:e.target.value })} className="w-full px-4 py-3 bg-pine-900/60 border border-pine-700 rounded-2xl text-white font-bold outline-none focus:border-pine-400" /></label>
-                      </div>
-                      <label className="block"><span className="block text-xs font-bold text-pine-200 mb-1.5">表示名</span><input type="text" required value={adminForm.adminName} onChange={e => setAdminForm({ ...adminForm, adminName:e.target.value })} className="w-full px-4 py-3 bg-pine-900/60 border border-pine-700 rounded-2xl text-white font-bold outline-none focus:border-pine-400" /></label>
-                      <button type="submit" className="w-full py-3.5 bg-white text-pine-800 font-bold rounded-2xl transition hover:bg-pine-50">設定を保存</button>
-                    </form>
-
-                    <div className="pt-4 border-t border-pine-700 space-y-2">
+                  <div className="bg-pine-800 text-white rounded-4xl p-6 shadow-lift space-y-5">
+                    <div className="flex items-center gap-2"><span className="text-xl">👑</span><h3 className="font-display font-bold text-xl">管理者モード</h3></div>
+                    <p className="text-sm text-pine-100 font-medium leading-relaxed">あなたは<strong className="font-bold text-white">GoogleログインのUID</strong>で管理者として認証されています。お知らせ配信・端末解除・モデレーション・投稿削除が利用できます。
+                    </p>
+                    <div className="pt-1 space-y-2">
                       <p className="text-xs font-bold text-pine-200">あなたの管理者ユーザーID（UID）</p>
-                      <p className="text-[11px] text-pine-300/90 font-medium leading-relaxed">下のIDを、Firebaseの「セキュリティルール」に貼り付けると、他の人の投稿を削除できる管理者として認められます。</p>
+                      <p className="text-[11px] text-pine-300/90 font-medium leading-relaxed">新しく管理者を追加するには、その人のUIDを Firebase コンソールの <code className="font-mono">artifacts/｛appId｝/admins</code> コレクションに空ドキュメントとして登録します。</p>
                       <div className="flex items-center gap-2">
                         <code className="flex-1 min-w-0 px-3 py-2.5 bg-pine-900/70 border border-pine-700 rounded-xl text-pine-100 text-xs font-mono break-all">{(user && user.uid) || '（未ログイン）'}</code>
                         <button type="button" onClick={() => { if (user && user.uid) { navigator.clipboard?.writeText(user.uid); showAlert('UIDをコピーしました。', 'success'); } }} className="shrink-0 px-3 py-2.5 bg-white text-pine-800 text-xs font-bold rounded-xl hover:bg-pine-50 transition">コピー</button>
@@ -1807,10 +1760,10 @@
                       <button onClick={handleGoogleLink} className="w-full py-3.5 bg-white border border-bark-300 hover:border-pine-400 text-bark-800 font-bold rounded-2xl shadow-soft transition flex items-center justify-center gap-3"><Icons.Google className="w-5 h-5" />Googleでログイン</button>
                     </React.Fragment>
                   )}
-                  {isAdmin && (
+                  {isDemo && (
                     <div className="pt-4 border-t border-bark-100 flex items-center justify-between gap-3">
-                      <div><p className="text-sm font-bold text-bark-700">管理者モード</p><p className="text-xs text-bark-400 font-medium">ログイン中：{adminCredentials.adminName}</p></div>
-                      <button onClick={handleAdminLogout} className="shrink-0 px-4 py-2.5 bg-ember-50 text-ember-600 border border-ember-200 rounded-xl text-sm font-bold transition">管理者終了</button>
+                      <div><p className="text-sm font-bold text-bark-700">管理者プレビュー（おためし）</p><p className="text-xs text-bark-400 font-medium">本番は Google ログインのUIDで認証されます</p></div>
+                      <button type="button" onClick={() => setDemoAdmin(v => !v)} className={`shrink-0 px-4 py-2.5 rounded-xl text-sm font-bold transition border ${demoAdmin ? 'bg-pine-700 text-white border-pine-700' : 'bg-canvas text-bark-700 border-bark-200'}`}>{demoAdmin ? '管理者プレビュー中' : '管理者としてプレビュー'}</button>
                     </div>
                   )}
                 </div>
@@ -1883,11 +1836,12 @@
                 <div className="bg-white border border-bark-200 rounded-4xl shadow-soft overflow-hidden">
                   <div className="px-5 pt-5 pb-3 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2.5"><div className="w-10 h-10 rounded-2xl bg-pine-50 text-pine-600 flex items-center justify-center"><Icons.Map className="w-5 h-5" /></div><h3 className="font-display font-bold text-lg text-bark-900">アクセスマップ</h3></div>
-                    <a href="https://maps.app.goo.gl/QD1Q8pzC7QRgbJh59" target="_blank" rel="noopener noreferrer" className="shrink-0 px-4 py-2.5 bg-pine-700 hover:bg-pine-600 text-white text-sm font-bold rounded-xl transition flex items-center gap-1.5"><Icons.Pin className="w-4 h-4" />ルート案内</a>
+                    <a href="https://maps.app.goo.gl/d51mKodHaPpowNVR6" target="_blank" rel="noopener noreferrer" className="shrink-0 px-4 py-2.5 bg-pine-700 hover:bg-pine-600 text-white text-sm font-bold rounded-xl transition flex items-center gap-1.5"><Icons.Pin className="w-4 h-4" />ルート案内</a>
                   </div>
                   <div className="relative w-full aspect-[4/3] sm:aspect-[16/9] bg-canvas">
-                    <iframe title="キャンプ場の地図" src="https://maps.google.com/maps?q=%E5%8C%97%E5%BA%83%E5%B3%B6%E5%B8%82%E5%A4%A7%E6%9B%B2&z=14&output=embed" className="absolute inset-0 w-full h-full border-0" loading="lazy" referrerPolicy="no-referrer-when-downgrade"></iframe>
+                    <iframe title="キャンプ場の地図" src="https://maps.google.com/maps?q=%E5%8C%97%E5%BA%83%E5%B3%B6%E3%82%AF%E3%83%AF%E3%82%AB%E3%83%96%E3%82%AD%E3%83%A3%E3%83%B3%E3%83%97%E5%A0%B4&z=15&output=embed" className="absolute inset-0 w-full h-full border-0" loading="lazy" referrerPolicy="no-referrer-when-downgrade"></iframe>
                   </div>
+                  <a href="https://maps.app.goo.gl/d51mKodHaPpowNVR6" target="_blank" rel="noopener noreferrer" className="block px-5 py-3.5 text-center text-sm font-bold text-pine-700 hover:bg-pine-50 transition border-t border-bark-100">Googleマップで開く →</a>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

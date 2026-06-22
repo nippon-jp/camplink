@@ -1750,6 +1750,17 @@
                         <button onClick={handleSignOut} className="shrink-0 px-4 py-2.5 bg-bark-100 hover:bg-bark-200 text-bark-700 rounded-xl text-sm font-bold transition">ログアウト</button>
                       </div>
                       <p className="text-xs text-bark-400 font-medium leading-relaxed">予約・プロフィールはこのアカウントでクラウドに同期されています。</p>
+
+                      {!isDemo && (
+                        <div className="pt-3 border-t border-bark-100 space-y-2">
+                          <p className="text-xs font-bold text-bark-600">あなたのユーザーID（UID）{isAdmin && <span className="ml-1 text-pine-600">· 管理者として認証済み 👑</span>}</p>
+                          <p className="text-[11px] text-bark-400 font-medium leading-relaxed">管理者になるには、このIDを Firebase コンソールの <code className="font-mono">artifacts/｛appId｝/admins</code> コレクションに空ドキュメントとして登録します。</p>
+                          <div className="flex items-center gap-2">
+                            <code className="flex-1 min-w-0 px-3 py-2.5 bg-canvas border border-bark-200 rounded-xl text-bark-700 text-xs font-mono break-all">{(user && user.uid) || '（未ログイン）'}</code>
+                            <button type="button" onClick={() => { if (user && user.uid) { navigator.clipboard?.writeText(user.uid); showAlert('UIDをコピーしました。', 'success'); } }} className="shrink-0 px-3 py-2.5 bg-pine-700 hover:bg-pine-600 text-white text-xs font-bold rounded-xl transition">コピー</button>
+                          </div>
+                        </div>
+                      )}
                     </React.Fragment>
                   ) : (
                     <React.Fragment>

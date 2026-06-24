@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>CAMP LINK｜北広島クワカブキャンプ場 予約＆コミュニティ</title>
+  <title>CAMP LINK｜キャンプでつながる情報サイト</title>
 
   <!-- ホーム画面アイコン / PWA -->
   <link rel="manifest" href="manifest.webmanifest">
@@ -236,6 +236,8 @@
         </svg>
       ),
       Photo: (p) => <Stroke {...p} d={["M2.25 15.75l5.16-5.16a2.25 2.25 0 013.18 0l5.16 5.16m-1.5-1.5l1.41-1.41a2.25 2.25 0 013.18 0l2.16 2.16","M2.25 18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V6A2.25 2.25 0 0019.5 3.75h-15A2.25 2.25 0 002.25 6v12z","M15.75 9.75a.75.75 0 100-1.5.75.75 0 000 1.5z"]} />,
+      Tent: (p) => <Stroke {...p} d={["M3.5 20.5L12 4l8.5 16.5","M12 4v16.5","M7.5 20.5L12 12l4.5 8.5"]} />,
+      Shield: (p) => <Stroke {...p} d={["M9 12.75L11.25 15 15 9.75","M12 2.714a11.95 11.95 0 01-8.25 3.286 12.02 12.02 0 00-.75 4.214c0 5.31 3.438 9.815 8.213 11.43a1.5 1.5 0 001.074 0C16.812 19.815 20.25 15.31 20.25 10a12.02 12.02 0 00-.75-4.214A11.95 11.95 0 0112 2.714z"]} />,
     };
 
     /* ---------------- Constants & helpers ---------------- */
@@ -246,6 +248,70 @@
     ];
 
     const ADMIN_IDENTITY = { adminName:'管理人', adminAvatarColor:'bg-pine-700' };
+    // キャンプ場施設の設備項目
+    const FACILITY_AMENITIES = [
+      { key:'toilet',  label:'トイレ',        icon:'🚻' },
+      { key:'power',   label:'電源サイト',    icon:'🔌' },
+      { key:'shop',    label:'売店',          icon:'🏪' },
+      { key:'shower',  label:'シャワー',      icon:'🚿' },
+      { key:'bath',    label:'お風呂・温泉',  icon:'♨️' },
+      { key:'wifi',    label:'Wi-Fi',       icon:'📶' },
+      { key:'bbq',     label:'BBQ場',       icon:'🍖' },
+      { key:'rental',  label:'レンタル用品',  icon:'🎪' },
+      { key:'parking', label:'駐車場',        icon:'🅿️' },
+      { key:'pet',     label:'ペット可',        icon:'🐕' },
+    ];
+    const FACILITY_AMENITY_MAP = Object.fromEntries(FACILITY_AMENITIES.map(a => [a.key, a]));
+    // 都道府県（ISO3166-2 JP コード）— OpenStreetMap からの全国キャンプ場取得用
+    const PREFECTURES_ISO = [
+      ['JP-01','北海道'],['JP-02','青森県'],['JP-03','岩手県'],['JP-04','宮城県'],['JP-05','秋田県'],['JP-06','山形県'],['JP-07','福島県'],
+      ['JP-08','茨城県'],['JP-09','栃木県'],['JP-10','群馬県'],['JP-11','埼玉県'],['JP-12','千葉県'],['JP-13','東京都'],['JP-14','神奈川県'],
+      ['JP-15','新潟県'],['JP-16','富山県'],['JP-17','石川県'],['JP-18','福井県'],['JP-19','山梨県'],['JP-20','長野県'],['JP-21','岐阜県'],
+      ['JP-22','静岡県'],['JP-23','愛知県'],['JP-24','三重県'],['JP-25','滃賀県'],['JP-26','京都府'],['JP-27','大阪府'],['JP-28','兵庫県'],
+      ['JP-29','奈良県'],['JP-30','和歌山県'],['JP-31','鳥取県'],['JP-32','島根県'],['JP-33','岡山県'],['JP-34','広島県'],['JP-35','山口県'],
+      ['JP-36','徳島県'],['JP-37','香川県'],['JP-38','愛媛県'],['JP-39','高知県'],['JP-40','福岡県'],['JP-41','佐賀県'],['JP-42','長崎県'],
+      ['JP-43','熊本県'],['JP-44','大分県'],['JP-45','宮崎県'],['JP-46','鹿児島県'],['JP-47','沖縄県'],
+    ];
+    const OVERPASS_ENDPOINTS = ['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter'];
+    // 指定都道府県のキャンプ場を OpenStreetMap から取得（名称・位置・Web・電話）
+    const fetchOsmCamps = async (iso) => {
+      const q = `[out:json][timeout:60];area["ISO3166-2"="${iso}"]->.a;nwr["tourism"="camp_site"]["name"](area.a);out center tags;`;
+      for (const ep of OVERPASS_ENDPOINTS) {
+        try {
+          const res = await fetch(ep + '?data=' + encodeURIComponent(q));
+          if (!res.ok) continue;
+          const data = await res.json();
+          const list = (data.elements || []).map(el => {
+            const t = el.tags || {};
+            const lat = el.lat != null ? el.lat : (el.center && el.center.lat);
+            const lon = el.lon != null ? el.lon : (el.center && el.center.lon);
+            const addr = t['addr:full'] || [t['addr:province'], t['addr:city'], t['addr:suburb'], t['addr:street'], t['addr:housenumber']].filter(Boolean).join('');
+            return { id:'osm:' + el.type + '/' + el.id, name:t.name, location:addr, operator:t.operator || '', website:t.website || t['contact:website'] || '', phone:t.phone || t['contact:phone'] || '', lat, lon };
+          }).filter(c => c.name).sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+          return list;
+        } catch (e) { /* 次のエンドポイントへ */ }
+      }
+      throw new Error('overpass unavailable');
+    };
+
+    const FAC_BLANK = { name:'', description:'', location:'', access:'', price:'', amenities:[], website:'', snsInstagram:'', snsX:'', photo:'', applicantName:'', applicantPhone:'', applicantEmail:'', applicantRole:'owner', agree:false };
+    // 画像を縮小・JPEG圧縮して dataURL を返す
+    const compressImage = (file, max = 1280, quality = 0.82) => new Promise((resolve, reject) => {
+      if (!file || !file.type.startsWith('image/')) { reject(new Error('not an image')); return; }
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+          let w = img.width, h = img.height;
+          if (w > max || h > max) { const r = Math.min(max / w, max / h); w = Math.round(w * r); h = Math.round(h * r); }
+          const c = document.createElement('canvas'); c.width = w; c.height = h;
+          c.getContext('2d').drawImage(img, 0, 0, w, h);
+          resolve(c.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = reject; img.src = ev.target.result;
+      };
+      reader.onerror = reject; reader.readAsDataURL(file);
+    });
     const AVATAR_COLORS = ['bg-pine-600','bg-teal-600','bg-indigo-600','bg-ember-500','bg-bark-700'];
 
     const PREFECTURES = ['北海道','青森県','岩手県','宮城県','秋田県','山形県','福島県','茨城県','栃木県','群馬県','埼玉県','千葉県','東京都','神奈川県','新潟県','富山県','石川県','福井県','山梨県','長野県','岐阜県','静岡県','愛知県','三重県','滋賀県','京都府','大阪府','兵庫県','奈良県','和歌山県','鳥取県','島根県','岡山県','広島県','山口県','徳島県','香川県','愛媛県','高知県','福岡県','佐賀県','長崎県','熊本県','大分県','宮崎県','鹿児島県','沖縄県'];
@@ -348,7 +414,7 @@
     function App() {
       const [showSplash, setShowSplash] = useState(() => !sessionStorage.getItem('cl_splash'));
       const [user, setUser] = useState(null);
-      const [activeTab, setActiveTab] = useState('calendar');
+      const [activeTab, setActiveTab] = useState('facilities');
       const [calendarMode, setCalendarMode] = useState('monthly');
       const [isDemo, setIsDemo] = useState(!useFirebaseRealtime);
       // 重複端末検知：'checking' | 'ok' | 'duplicate'
@@ -372,6 +438,37 @@
       const [eventsList, setEventsList] = useState([]);
       const [reviews, setReviews] = useState([]);
       const [announcements, setAnnouncements] = useState([]);
+      // キャンプ場施設登録
+      const [facilities, setFacilities] = useState([]);
+      const [facKyc, setFacKyc] = useState({});            // 本人確認情報（管理者のみ） { facilityId: {...} }
+      const [showFacForm, setShowFacForm] = useState(false);
+      const [facForm, setFacForm] = useState(FAC_BLANK);
+      const [facDetail, setFacDetail] = useState(null);    // 詳細表示中の施設
+      const [facSubmitting, setFacSubmitting] = useState(false);
+      const [favFacilities, setFavFacilities] = useState(() => getLocalData('fac_favorites', []));
+      const toggleFavFacility = (id) => setFavFacilities(prev => { const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]; setLocalData('fac_favorites', next); return next; });
+      // 全国キャンプ場（OpenStreetMap）
+      const [osmPref, setOsmPref] = useState('');
+      const [osmList, setOsmList] = useState([]);
+      const [osmLoading, setOsmLoading] = useState(false);
+      const [osmError, setOsmError] = useState('');
+      const loadPrefCamps = async (iso) => {
+        setOsmPref(iso); setOsmError(''); setOsmList([]);
+        if (!iso) return;
+        const cacheKey = 'osm_camps_' + iso;
+        const cached = getLocalData(cacheKey, null);
+        if (cached && cached.list && (Date.now() - cached.ts) < 30 * 86400000) { setOsmList(cached.list); return; }
+        setOsmLoading(true);
+        try {
+          const list = await fetchOsmCamps(iso);
+          setLocalData(cacheKey, { ts: Date.now(), list });
+          setOsmList(list);
+        } catch (e) {
+          if (cached && cached.list) { setOsmList(cached.list); }
+          else { setOsmError('読み込みに失敗しました。時間をおいて再度お試しください。'); }
+        }
+        setOsmLoading(false);
+      };
       const [currentDate, setCurrentDate] = useState(new Date());
       const [listFilter, setListFilter] = useState('all');
       const [searchTerm, setSearchTerm] = useState('');
@@ -405,11 +502,19 @@
       const chatScrollRef = useRef(null);
       const [alertMsg, setAlertMsg] = useState(null);
       const [confirmModal, setConfirmModal] = useState({ isOpen:false, title:'', message:'', tone:'pine', onConfirm:()=>{}, onCancel:()=>{} });
+      const [promptText, setPromptText] = useState('');
 
       const showAlert = (message, type='info') => { setAlertMsg({ message, type }); setTimeout(() => setAlertMsg(null), 3200); };
       const showConfirm = (title, message, onConfirm, tone='pine') => {
         setConfirmModal({ isOpen:true, title, message, tone,
           onConfirm: () => { onConfirm(); setConfirmModal(p => ({ ...p, isOpen:false })); },
+          onCancel: () => setConfirmModal(p => ({ ...p, isOpen:false })) });
+      };
+      // テキスト入力付きの確認ダイアログ
+      const showPrompt = (title, placeholder, onSubmit, confirmLabel='送信', tone='pine') => {
+        setPromptText('');
+        setConfirmModal({ isOpen:true, title, message:'', tone, prompt:true, placeholder, confirmLabel,
+          onConfirm: () => { onSubmit(promptText); setConfirmModal(p => ({ ...p, isOpen:false })); },
           onCancel: () => setConfirmModal(p => ({ ...p, isOpen:false })) });
       };
 
@@ -422,6 +527,7 @@
         setEventsList(getLocalData('events', []));
         setReviews(getLocalData('reviews', []));
         setAnnouncements(getLocalData('announcements', []));
+        setFacilities(getLocalData('facilities', []));
       };
       const persistDemo = (key, val) => { setLocalData(key, val); loadDemo(); };
 
@@ -583,6 +689,7 @@
         unsubs.push(pub().collection('events').onSnapshot(s => { const l=[]; s.forEach(d => l.push({ id:d.id, ...d.data() })); l.sort((a,b)=>b.id.localeCompare(a.id)); setEventsList(l); }));
         unsubs.push(pub().collection('reviews').onSnapshot(s => { const l=[]; s.forEach(d => l.push({ id:d.id, ...d.data() })); l.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)); setReviews(l); }));
         unsubs.push(pub().collection('announcements').onSnapshot(s => { const l=[]; s.forEach(d => l.push({ id:d.id, ...d.data() })); l.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)); setAnnouncements(l); }));
+        unsubs.push(pub().collection('facilities').onSnapshot(s => { const l=[]; s.forEach(d => l.push({ id:d.id, ...d.data() })); l.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)); setFacilities(l); }, () => {}));
         unsubs.push(dbObj.collection('artifacts').doc(currentAppId).collection('admins').onSnapshot(s => { const l=[]; s.forEach(d => l.push(d.id)); setAdminUids(l); }, () => {}));
         // たきび広場のモデレーション設定（公開データドキュメント）
         unsubs.push(pub().onSnapshot(d => {
@@ -594,7 +701,14 @@
         return () => unsubs.forEach(u => u());
       }, [user, isDemo]);
 
-      /* ---- chat autoscroll (no scrollIntoView) ---- */
+      /* ---- 本人確認情報（非公開）の読込：管理者のみ ---- */
+      useEffect(() => {
+        if (isDemo || !user || !dbObj || !isAdmin) return;
+        const unsub = pub().collection('facility_private').onSnapshot(s => {
+          const m = {}; s.forEach(d => { m[d.id] = d.data(); }); setFacKyc(m);
+        }, () => {});
+        return () => unsub && unsub();
+      }, [user, isDemo, isAdmin]);
       useEffect(() => {
         if (activeTab === 'chat' && chatScrollRef.current) {
           const el = chatScrollRef.current; el.scrollTop = el.scrollHeight;
@@ -766,7 +880,68 @@
           : <React.Fragment key={i}>{part}</React.Fragment>
       );
 
-      /* ---- reservations ---- */
+      /* ---- キャンプ場施設登録 ---- */
+      const openFacForm = () => {
+        if (isDemo) { setFacForm({ ...FAC_BLANK, applicantName: profile.nickname || '', applicantEmail: profile.googleEmail || '' }); setShowFacForm(true); return; }
+        if (!user || user.isAnonymous) { showAlert('施設登録には Google ログインが必要です。本人確認のため、プロフィールからログインしてください。', 'error'); setActiveTab('profile'); return; }
+        setFacForm({ ...FAC_BLANK, applicantName: profile.nickname || '', applicantEmail: profile.googleEmail || '' });
+        setShowFacForm(true);
+      };
+      const toggleFacAmenity = (key) => setFacForm(f => ({ ...f, amenities: f.amenities.includes(key) ? f.amenities.filter(k => k !== key) : [...f.amenities, key] }));
+      // 参考情報の施設を「関係者として認証申請」：基本情報をフォームに事前入力
+      const claimReference = (ref) => {
+        setFacDetail(null);
+        if (!isDemo && (!user || user.isAnonymous)) { showAlert('認証申請には Google ログインが必要です。', 'error'); setActiveTab('profile'); return; }
+        setFacForm({ ...FAC_BLANK, name: ref.name || '', location: ref.location || '', access: ref.access || '', applicantName: profile.nickname || '', applicantEmail: profile.googleEmail || '' });
+        setShowFacForm(true);
+      };      const handleFacImage = async (file) => {
+        if (!file) return;
+        try { const url = await compressImage(file); setFacForm(f => ({ ...f, photo: url })); }
+        catch (e) { showAlert('画像ファイルを選んでください。', 'error'); }
+      };
+      const handleSubmitFacility = async (e) => {
+        e.preventDefault();
+        const f = facForm;
+        if (!f.name.trim()) { showAlert('施設名を入力してください。', 'error'); return; }
+        if (!f.applicantName.trim() || !f.applicantPhone.trim() || !f.applicantEmail.trim()) { showAlert('本人確認のため、申請者の氏名・電話番号・メールをすべて入力してください。', 'error'); return; }
+        if (!f.agree) { showAlert('誓約事項に同意してください。', 'error'); return; }
+        const pub_ = {
+          ownerId: user ? user.uid : 'demo', status:'pending',
+          name:f.name.trim(), description:f.description.trim(), location:f.location.trim(), access:f.access.trim(),
+          price:f.price.trim(), amenities:f.amenities, website:f.website.trim(),
+          sns:{ instagram:f.snsInstagram.trim(), x:f.snsX.trim() }, photo:f.photo || '',
+          createdAt: Date.now(), reviewNote:'',
+        };
+        const kyc = { facilityId:'', ownerId: user ? user.uid : 'demo', applicantName:f.applicantName.trim(), applicantPhone:f.applicantPhone.trim(), applicantEmail:f.applicantEmail.trim(), applicantRole:f.applicantRole, createdAt: Date.now() };
+        setFacSubmitting(true);
+        try {
+          if (isDemo) {
+            const id = 'fac_' + Date.now();
+            persistDemo('facilities', [...getLocalData('facilities', []), { id, ...pub_, _kyc:{ ...kyc, facilityId:id } }]);
+          } else {
+            const ref = await pub().collection('facilities').add(pub_);
+            await pub().collection('facility_private').doc(ref.id).set({ ...kyc, facilityId:ref.id });
+          }
+          setShowFacForm(false); setFacForm(FAC_BLANK);
+          showAlert('申請を受け付けました。管理者の審査後に公開されます。', 'success');
+        } catch (err) { console.error('facility submit error:', err); showAlert('送信に失敗しました。通信状況をご確認ください。', 'error'); }
+        setFacSubmitting(false);
+      };
+      const setFacStatus = (fac, status, note) => {
+        if (isDemo) { persistDemo('facilities', getLocalData('facilities', []).map(x => x.id === fac.id ? { ...x, status, reviewNote: note || '', reviewedAt: Date.now() } : x)); return; }
+        pub().collection('facilities').doc(fac.id).update({ status, reviewNote: note || '', reviewedAt: Date.now() })
+          .catch(err => { console.error(err); showAlert('更新に失敗しました。管理者権限をご確認ください。', 'error'); });
+      };
+      const handleApproveFacility = (fac) => showConfirm('この施設を承認しますか？', '承認すると「施設」タブに公開されます。', () => { setFacStatus(fac, 'approved'); showAlert('施設を承認しました。', 'success'); }, 'pine');
+      const handleRejectFacility = (fac) => showPrompt('申請を却下しますか？', '却下理由（申請者に表示されます・任意）', (note) => { setFacStatus(fac, 'rejected', note); showAlert('申請を却下しました。', 'info'); }, '却下する', 'ember');
+      const handleDeleteFacility = (fac) => showConfirm('この施設を削除しますか？', '施設情報と本人確認情報を削除します。', () => {
+        if (isDemo) { persistDemo('facilities', getLocalData('facilities', []).filter(x => x.id !== fac.id)); setFacDetail(null); return; }
+        pub().collection('facilities').doc(fac.id).delete();
+        pub().collection('facility_private').doc(fac.id).delete().catch(() => {});
+        setFacDetail(null);
+        showAlert('施設を削除しました。', 'success');
+      }, 'ember');
+
       const handleSaveReservation = (e) => {
         e.preventDefault();
         const conflict = reservations.some(r => r.date === selectedDate && r.siteType === resForm.siteType && r.id !== resForm.id);
@@ -948,9 +1123,10 @@
       }, [reviews]);
 
       const tabs = [
+        { id:'facilities', label:'キャンプ場', Icon:Icons.Tent },
         { id:'calendar', label:'予約', Icon:Icons.Calendar },
         { id:'reviews',  label:'口コミ', Icon:Icons.Star },
-        { id:'events',   label:'コミュニティ', Icon:Icons.Community },
+        { id:'events',   label:'交流', Icon:Icons.Community },
         { id:'chat',     label:'たきび', Icon:Icons.Fire },
         { id:'guide',    label:'ガイド', Icon:Icons.Map },
       ];
@@ -992,7 +1168,7 @@
               </div>
               <div className="space-y-4 z-10 max-w-md">
                 <h1 className="font-display text-5xl sm:text-6xl font-bold text-pine-800 tracking-tight">CAMP LINK</h1>
-                <p className="text-pine-600 font-bold tracking-widest text-sm">北広島クワカブキャンプ場</p>
+                <p className="text-pine-600 font-bold tracking-widest text-sm">キャンプでつながる情報サイト</p>
                 <div className="h-px w-14 bg-bark-300 mx-auto"></div>
                 <p className="text-bark-500 font-medium leading-relaxed text-sm max-w-xs mx-auto">白樺の木々と触れ合い、仲間とつながる<br/>スマートな予約コミュニティ</p>
               </div>
@@ -1014,6 +1190,124 @@
             </div>
           )}
 
+          {/* ================= Facility application form ================= */}
+          {showFacForm && (
+            <div className="fixed inset-0 z-[70] bg-bark-900/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-6">
+              <div className="bg-paper w-full sm:max-w-lg rounded-t-4xl sm:rounded-4xl overflow-hidden shadow-lift anim-sheet max-h-[92dvh] flex flex-col">
+                <div className="bg-white px-6 py-5 border-b border-bark-100 flex items-center justify-between gap-3 shrink-0">
+                  <div><h3 className="font-display font-bold text-xl text-bark-900">施設を登録する</h3><p className="text-sm font-bold text-pine-600 mt-0.5">所有者・運営者の方限定</p></div>
+                  <button onClick={() => setShowFacForm(false)} className="w-9 h-9 rounded-xl bg-bark-100 text-bark-500 flex items-center justify-center"><Icons.X className="w-5 h-5" /></button>
+                </div>
+                <form onSubmit={handleSubmitFacility} className="overflow-y-auto scroll-soft flex-1">
+                  <div className="p-6 space-y-6">
+                    {/* 本人確認 */}
+                    <div className="bg-pine-50 border border-pine-200 rounded-3xl p-5 space-y-4">
+                      <div className="flex items-center gap-2"><Icons.Shield className="w-5 h-5 text-pine-600" /><h4 className="font-display font-bold text-bark-900">本人確認</h4></div>
+                      <p className="text-xs text-bark-500 font-medium leading-relaxed">以下は管理者の審査にのみ使用され、一般には公開されません。</p>
+                      <div>
+                        <span className="block text-sm font-bold text-bark-600 mb-2">お立場</span>
+                        <div className="flex gap-2">
+                          {[['owner','施設の所有者'],['operator','施設の運営者']].map(([v,l]) => (
+                            <button type="button" key={v} onClick={() => setFacForm(f => ({ ...f, applicantRole:v }))} className={`flex-1 py-3 rounded-2xl border-2 text-sm font-bold transition ${facForm.applicantRole===v ? 'border-pine-600 bg-pine-100 text-pine-800' : 'border-bark-200 bg-white text-bark-600'}`}>{l}</button>
+                          ))}
+                        </div>
+                      </div>
+                      <Field label="申請者の氏名"><input type="text" required value={facForm.applicantName} onChange={e => setFacForm(f => ({ ...f, applicantName:e.target.value }))} placeholder="山田 太郎" className={inputCls} /></Field>
+                      <Field label="電話番号"><input type="tel" required value={facForm.applicantPhone} onChange={e => setFacForm(f => ({ ...f, applicantPhone:e.target.value }))} placeholder="090-1234-5678" className={inputCls} /></Field>
+                      <Field label="メールアドレス"><input type="email" required value={facForm.applicantEmail} onChange={e => setFacForm(f => ({ ...f, applicantEmail:e.target.value }))} placeholder="you@example.com" className={inputCls} /></Field>
+                    </div>
+
+                    {/* 施設情報 */}
+                    <div className="space-y-4">
+                      <h4 className="font-display font-bold text-bark-900">施設情報（公開）</h4>
+                      <Field label="施設名"><input type="text" required value={facForm.name} onChange={e => setFacForm(f => ({ ...f, name:e.target.value }))} placeholder="〇〇キャンプ場" className={inputCls} /></Field>
+                      <Field label="紹介文・説明"><textarea rows="3" value={facForm.description} onChange={e => setFacForm(f => ({ ...f, description:e.target.value }))} placeholder="施設の特長や魅力をご記入ください。" className={`${inputCls} resize-none`} /></Field>
+                      <Field label="所在地"><input type="text" value={facForm.location} onChange={e => setFacForm(f => ({ ...f, location:e.target.value }))} placeholder="都道府県・市町村" className={inputCls} /></Field>
+                      <Field label="アクセス"><input type="text" value={facForm.access} onChange={e => setFacForm(f => ({ ...f, access:e.target.value }))} placeholder="最寄駅・車でのアクセスなど" className={inputCls} /></Field>
+                      <Field label="料金・サイト種別"><input type="text" value={facForm.price} onChange={e => setFacForm(f => ({ ...f, price:e.target.value }))} placeholder="例：テントサイト 1泊 4,000円〜" className={inputCls} /></Field>
+                      <div>
+                        <span className="block text-sm font-bold text-bark-600 mb-2">設備（該当するものを選択）</span>
+                        <div className="flex flex-wrap gap-2">
+                          {FACILITY_AMENITIES.map(a => { const on = facForm.amenities.includes(a.key); return (
+                            <button type="button" key={a.key} onClick={() => toggleFacAmenity(a.key)} className={`px-3 py-2 rounded-2xl border-2 text-sm font-bold transition ${on ? 'border-pine-600 bg-pine-50 text-pine-800' : 'border-bark-200 bg-white text-bark-500'}`}>{a.icon} {a.label}</button>
+                          ); })}
+                        </div>
+                      </div>
+                      <Field label="公式サイト"><input type="url" value={facForm.website} onChange={e => setFacForm(f => ({ ...f, website:e.target.value }))} placeholder="https://…" className={inputCls} /></Field>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="Instagram"><input type="text" value={facForm.snsInstagram} onChange={e => setFacForm(f => ({ ...f, snsInstagram:e.target.value }))} placeholder="@ユーザー名" className={inputCls} /></Field>
+                        <Field label="X (Twitter)"><input type="text" value={facForm.snsX} onChange={e => setFacForm(f => ({ ...f, snsX:e.target.value }))} placeholder="@ユーザー名" className={inputCls} /></Field>
+                      </div>
+                      <div>
+                        <span className="block text-sm font-bold text-bark-600 mb-2">施設写真</span>
+                        {facForm.photo ? (
+                          <div className="relative inline-block">
+                            <img src={facForm.photo} alt="施設写真" className="h-32 rounded-2xl border border-bark-200 object-cover" />
+                            <button type="button" onClick={() => setFacForm(f => ({ ...f, photo:'' }))} className="absolute -top-2 -right-2 w-7 h-7 rounded-full bg-bark-900/80 text-white flex items-center justify-center"><Icons.X className="w-4 h-4" /></button>
+                          </div>
+                        ) : (
+                          <label className="flex items-center justify-center gap-2 h-24 border-2 border-dashed border-bark-200 rounded-2xl text-bark-400 font-bold cursor-pointer hover:border-pine-400 transition">
+                            <Icons.Photo className="w-5 h-5" />写真を選ぶ
+                            <input type="file" accept="image/*" className="hidden" onChange={e => { handleFacImage(e.target.files[0]); e.target.value=''; }} />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+
+                    <label className="flex items-start gap-3 bg-canvas border border-bark-200 rounded-2xl p-4 cursor-pointer">
+                      <input type="checkbox" checked={facForm.agree} onChange={e => setFacForm(f => ({ ...f, agree:e.target.checked }))} className="mt-0.5 w-5 h-5 accent-pine-600 shrink-0" />
+                      <span className="text-sm text-bark-600 font-medium leading-relaxed">私は当施設の<strong className="text-bark-800">所有者または運営者</strong>であり、提出した情報に虚偽がないことを誓約します。</span>
+                    </label>
+                  </div>
+                  <div className="p-4 bg-white border-t border-bark-100 shrink-0">
+                    <button type="submit" disabled={facSubmitting} className="w-full py-4 bg-pine-700 hover:bg-pine-600 disabled:bg-bark-300 text-white font-bold rounded-2xl transition">{facSubmitting ? '送信中…' : '申請を送信する'}</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* ================= Facility detail ================= */}
+          {facDetail && (
+            <div className="fixed inset-0 z-[70] bg-bark-900/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-6">
+              <div className="bg-paper w-full sm:max-w-lg rounded-t-4xl sm:rounded-4xl overflow-hidden shadow-lift anim-sheet max-h-[92dvh] flex flex-col">
+                <div className="relative shrink-0">
+                  {facDetail.photo
+                    ? <img src={facDetail.photo} alt={facDetail.name} className="w-full h-52 object-cover" />
+                    : <div className="w-full h-32 bg-pine-50 flex items-center justify-center"><Icons.Tent className="w-12 h-12 text-pine-300" /></div>}
+                  <button onClick={() => setFacDetail(null)} className="absolute top-4 right-4 w-9 h-9 rounded-xl bg-white/90 text-bark-700 flex items-center justify-center shadow-soft"><Icons.X className="w-5 h-5" /></button>
+                  <button onClick={() => toggleFavFacility(facDetail.id)} className="absolute top-4 right-16 w-9 h-9 rounded-xl bg-white/90 flex items-center justify-center shadow-soft active:scale-90 transition"><Icons.Heart filled={favFacilities.includes(facDetail.id)} className={`w-5 h-5 ${favFacilities.includes(facDetail.id) ? 'text-ember-500' : 'text-bark-400'}`} /></button>
+                </div>
+                <div className="overflow-y-auto scroll-soft flex-1 p-6 space-y-5">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2"><h3 className="font-display font-bold text-2xl text-bark-900">{facDetail.name}</h3><span className="shrink-0 text-[11px] font-bold text-pine-700 bg-pine-50 border border-pine-200 px-2.5 py-1 rounded-full flex items-center gap-1"><Icons.Shield className="w-3.5 h-3.5" />認証済</span></div>
+                    {facDetail.location && <p className="text-sm text-bark-500 font-medium flex items-center gap-1"><Icons.Pin className="w-4 h-4 shrink-0" />{facDetail.location}</p>}
+                  </div>
+                  {facDetail.description && <p className="text-bark-600 font-medium leading-relaxed whitespace-pre-wrap">{facDetail.description}</p>}
+                  <div className="space-y-2.5">
+                    {facDetail.access && <div className="flex gap-2 text-sm"><span className="font-bold text-bark-500 shrink-0 w-20">アクセス</span><span className="text-bark-700 font-medium">{facDetail.access}</span></div>}
+                    {facDetail.price && <div className="flex gap-2 text-sm"><span className="font-bold text-bark-500 shrink-0 w-20">料金</span><span className="text-bark-700 font-medium">{facDetail.price}</span></div>}
+                  </div>
+                  {facDetail.amenities?.length > 0 && (
+                    <div><span className="block text-sm font-bold text-bark-600 mb-2">設備</span><div className="flex flex-wrap gap-1.5">{facDetail.amenities.map(k => FACILITY_AMENITY_MAP[k] && <span key={k} className="text-sm font-bold text-bark-600 bg-white border border-bark-200 rounded-full px-3 py-1.5">{FACILITY_AMENITY_MAP[k].icon} {FACILITY_AMENITY_MAP[k].label}</span>)}</div></div>
+                  )}
+                  {(facDetail.website || facDetail.sns?.instagram || facDetail.sns?.x) && (
+                    <div className="flex flex-wrap gap-2">
+                      {facDetail.website && <a href={facDetail.website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-pine-700 hover:bg-pine-600 text-white text-sm font-bold rounded-xl transition"><Icons.Globe className="w-4 h-4" />公式サイト</a>}
+                      {facDetail.sns?.instagram && <a href={snsToUrl('instagram', facDetail.sns.instagram)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-white border border-bark-200 text-bark-700 text-sm font-bold rounded-xl transition hover:border-pine-300">Instagram</a>}
+                      {facDetail.sns?.x && <a href={snsToUrl('x', facDetail.sns.x)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-white border border-bark-200 text-bark-700 text-sm font-bold rounded-xl transition hover:border-pine-300">X</a>}
+                    </div>
+                  )}
+                  {isAdmin && (
+                    <div className="pt-2 border-t border-bark-100">
+                      <button onClick={() => handleDeleteFacility(facDetail)} className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-ember-50 text-ember-600 border border-ember-200 hover:bg-ember-100 text-sm font-bold rounded-xl transition"><Icons.Trash className="w-4 h-4" />施設を削除</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ================= Confirm ================= */}
           {confirmModal.isOpen && (
             <div className="fixed inset-0 z-[80] bg-bark-900/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-6">
@@ -1021,9 +1315,12 @@
                 <div className="p-7 sm:p-8 space-y-6">
                   <h3 className="font-display font-bold text-2xl text-bark-900">{confirmModal.title}</h3>
                   <p className="text-bark-600 font-medium leading-relaxed">{confirmModal.message}</p>
+                  {confirmModal.prompt && (
+                    <textarea autoFocus rows="3" value={promptText} onChange={e => setPromptText(e.target.value)} placeholder={confirmModal.placeholder || ''} className={`${inputCls} resize-none`} />
+                  )}
                   <div className="flex gap-3 pt-1">
                     <button onClick={confirmModal.onCancel} className="flex-1 py-3.5 bg-bark-100 hover:bg-bark-200 text-bark-700 font-bold rounded-2xl transition">もどる</button>
-                    <button onClick={confirmModal.onConfirm} className={`flex-1 py-3.5 text-white font-bold rounded-2xl transition ${confirmModal.tone==='ember' ? 'bg-ember-500 hover:bg-ember-600' : 'bg-pine-700 hover:bg-pine-600'}`}>実行する</button>
+                    <button onClick={confirmModal.onConfirm} className={`flex-1 py-3.5 text-white font-bold rounded-2xl transition ${confirmModal.tone==='ember' ? 'bg-ember-500 hover:bg-ember-600' : 'bg-pine-700 hover:bg-pine-600'}`}>{confirmModal.confirmLabel || '実行する'}</button>
                   </div>
                 </div>
               </div>
@@ -1065,7 +1362,7 @@
                 <div className="w-10 h-10 bg-pine-700 rounded-2xl flex items-center justify-center p-2 shadow-soft group-active:scale-95 transition"><Brand className="w-full h-full" /></div>
                 <div className="text-left leading-none">
                   <div className="font-display font-bold text-lg text-bark-900 tracking-tight">CAMP LINK</div>
-                  <div className="text-[10px] font-bold text-bark-400 mt-0.5 tracking-wide">北広島クワカブキャンプ場</div>
+                  <div className="text-[10px] font-bold text-bark-400 mt-0.5 tracking-wide">キャンプでつながる情報サイト</div>
                 </div>
               </button>
 
@@ -1826,50 +2123,184 @@
               </div>
             )}
 
+            {/* ---------------- FACILITIES (キャンプ場施設) ---------------- */}
+            {activeTab === 'facilities' && (() => {
+              const approved = facilities.filter(f => f.status === 'approved').sort((a, b) => {
+                const fa = favFacilities.includes(a.id), fb = favFacilities.includes(b.id);
+                if (fa !== fb) return fa ? -1 : 1;
+                return (b.createdAt || 0) - (a.createdAt || 0);
+              });
+              const mineApps = facilities.filter(f => f.ownerId === user?.uid && f.status !== 'approved');
+              const pending = facilities.filter(f => f.status === 'pending');
+              return (
+                <div className="space-y-5 anim-fade">
+                  <div className="bg-pine-800 text-white rounded-4xl p-6 sm:p-8 shadow-lift relative overflow-hidden">
+                    <div className="absolute -right-4 -bottom-6 opacity-[0.13]"><Brand className="w-40 h-40" /></div>
+                    <div className="relative space-y-4">
+                      <h2 className="font-display font-bold text-2xl sm:text-3xl">キャンプ場をさがす</h2>
+                      <p className="text-sm font-medium text-pine-100 leading-relaxed max-w-sm">受付済みの施設をご紹介。あなたが施設の所有者・運営者なら、本人確認の上で掛載できます。</p>
+                      <button onClick={openFacForm} className="inline-flex items-center gap-2 px-5 py-3 bg-white text-pine-800 font-bold rounded-2xl hover:bg-pine-50 transition"><Icons.Plus className="w-5 h-5" />施設を登録する</button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3 bg-pine-50 border border-pine-200 rounded-3xl p-4">
+                    <Icons.Shield className="w-5 h-5 text-pine-600 shrink-0 mt-0.5" />
+                    <p className="text-xs text-pine-800 font-medium leading-relaxed">施設登録は<strong>所有者・運営者の方限定</strong>です。申請後は管理者が本人確認・内容を審査し、承認された施設のみ公開されます。</p>
+                  </div>
+
+                  {mineApps.length > 0 && (
+                    <div className="space-y-2.5">
+                      {mineApps.map(f => (
+                        <div key={f.id} className={`rounded-3xl border p-4 ${f.status==='pending' ? 'bg-amber-50 border-amber-200' : 'bg-ember-50 border-ember-200'}`}>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${f.status==='pending' ? 'bg-amber-200 text-amber-800' : 'bg-ember-200 text-ember-800'}`}>{f.status==='pending' ? '審査中' : '却下'}</span>
+                            <span className="font-bold text-bark-900">{f.name}</span>
+                          </div>
+                          <p className="text-sm text-bark-600 font-medium">{f.status==='pending' ? '管理者の審査をお待ちください。承認後に公開されます。' : (f.reviewNote ? `理由：${f.reviewNote}` : '申請は承認されませんでした。')}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {isAdmin && pending.length > 0 && (
+                    <div className="bg-white border border-bark-200 rounded-4xl p-5 shadow-soft space-y-4">
+                      <div className="flex items-center gap-2"><span className="text-xl">📋</span><h3 className="font-display font-bold text-lg text-bark-900">審査待ちの申請（{pending.length}）</h3></div>
+                      <div className="space-y-4">
+                        {pending.map(f => {
+                          const kyc = isDemo ? (f._kyc || {}) : (facKyc[f.id] || {});
+                          return (
+                            <div key={f.id} className="rounded-3xl border border-bark-200 overflow-hidden">
+                              {f.photo && <img src={f.photo} alt={f.name} loading="lazy" className="w-full h-40 object-cover" />}
+                              <div className="p-4 space-y-3">
+                                <div><h4 className="font-bold text-bark-900 text-lg">{f.name}</h4>{f.location && <p className="text-sm text-bark-500 font-medium flex items-center gap-1 mt-0.5"><Icons.Pin className="w-4 h-4 shrink-0" />{f.location}</p>}</div>
+                                {f.description && <p className="text-sm text-bark-600 font-medium leading-relaxed whitespace-pre-wrap">{f.description}</p>}
+                                {f.amenities?.length > 0 && <div className="flex flex-wrap gap-1.5">{f.amenities.map(k => FACILITY_AMENITY_MAP[k] && <span key={k} className="text-xs font-bold text-bark-600 bg-canvas border border-bark-200 rounded-full px-2.5 py-1">{FACILITY_AMENITY_MAP[k].icon} {FACILITY_AMENITY_MAP[k].label}</span>)}</div>}
+                                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 space-y-1.5">
+                                  <p className="text-xs font-bold text-amber-800 flex items-center gap-1.5"><Icons.Shield className="w-4 h-4" />本人確認情報（管理者のみ閲覧可）</p>
+                                  <div className="text-sm text-bark-700 font-medium space-y-0.5">
+                                    <p>氏名：{kyc.applicantName || '—'}（{kyc.applicantRole === 'operator' ? '運営者' : '所有者'}）</p>
+                                    <p>電話：{kyc.applicantPhone ? <a href={`tel:${kyc.applicantPhone}`} className="text-pine-700 underline">{kyc.applicantPhone}</a> : '—'}</p>
+                                    <p>メール：{kyc.applicantEmail ? <a href={`mailto:${kyc.applicantEmail}`} className="text-pine-700 underline break-all">{kyc.applicantEmail}</a> : '—'}</p>
+                                  </div>
+                                  {!isDemo && !facKyc[f.id] && <p className="text-[11px] text-amber-700 font-medium">※ 本人確認情報を読み込めません。セキュリティルール（facility_private）をご確認ください。</p>}
+                                </div>
+                                <div className="flex gap-2 pt-1">
+                                  <button onClick={() => handleApproveFacility(f)} className="flex-1 py-3 bg-pine-700 hover:bg-pine-600 text-white font-bold rounded-2xl transition flex items-center justify-center gap-1.5"><Icons.Check className="w-4 h-4" />承認</button>
+                                  <button onClick={() => handleRejectFacility(f)} className="flex-1 py-3 bg-ember-50 text-ember-600 border border-ember-200 hover:bg-ember-100 font-bold rounded-2xl transition">却下</button>
+                                  <button onClick={() => handleDeleteFacility(f)} className="shrink-0 px-3 py-3 bg-bark-100 text-bark-500 hover:bg-bark-200 rounded-2xl transition"><Icons.Trash className="w-4 h-4" /></button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {approved.length === 0 ? (
+                    <div className="text-center py-14 text-bark-400 font-bold">まだ公開中の施設はありません。<br/><span className="text-sm">最初の施設を登録してみませんか？</span></div>
+                  ) : (
+                    <div className="space-y-4">
+                      {approved.map(f => (
+                        <button key={f.id} onClick={() => setFacDetail(f)} className="w-full text-left bg-white border border-bark-200 rounded-4xl shadow-soft overflow-hidden hover:border-pine-300 transition">
+                          <div className="relative">
+                            {f.photo
+                              ? <img src={f.photo} alt={f.name} loading="lazy" className="w-full h-44 object-cover" />
+                              : <div className="w-full h-32 bg-pine-50 flex items-center justify-center"><Icons.Tent className="w-12 h-12 text-pine-300" /></div>}
+                            <span role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); toggleFavFacility(f.id); }} className="absolute top-3 right-3 w-10 h-10 rounded-full bg-white/90 backdrop-blur flex items-center justify-center shadow-soft active:scale-90 transition"><Icons.Heart filled={favFacilities.includes(f.id)} className={`w-5 h-5 ${favFacilities.includes(f.id) ? 'text-ember-500' : 'text-bark-400'}`} /></span>
+                          </div>
+                          <div className="p-5 space-y-2.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <h3 className="font-display font-bold text-lg text-bark-900 flex items-center gap-1.5">{favFacilities.includes(f.id) && <Icons.Heart filled className="w-4 h-4 text-ember-500 shrink-0" />}{f.name}</h3>
+                              <span className="shrink-0 text-[11px] font-bold text-pine-700 bg-pine-50 border border-pine-200 px-2.5 py-1 rounded-full flex items-center gap-1"><Icons.Shield className="w-3.5 h-3.5" />認証済</span>
+                            </div>
+                            {f.location && <p className="text-sm text-bark-500 font-medium flex items-center gap-1"><Icons.Pin className="w-4 h-4 shrink-0" />{f.location}</p>}
+                            {f.description && <p className="text-sm text-bark-600 font-medium leading-relaxed line-clamp-2">{f.description}</p>}
+                            {f.amenities?.length > 0 && <div className="flex flex-wrap gap-1.5 pt-0.5">{f.amenities.slice(0,5).map(k => FACILITY_AMENITY_MAP[k] && <span key={k} className="text-xs font-bold text-bark-600 bg-canvas border border-bark-200 rounded-full px-2.5 py-1">{FACILITY_AMENITY_MAP[k].icon} {FACILITY_AMENITY_MAP[k].label}</span>)}{f.amenities.length>5 && <span className="text-xs font-bold text-bark-400 px-1 py-1">+{f.amenities.length-5}</span>}</div>}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* 全国のキャンプ場（OpenStreetMap） */}
+                  <div className="bg-white border border-bark-200 rounded-4xl p-5 shadow-soft space-y-4">
+                    <div className="flex items-center gap-2"><Icons.Map className="w-5 h-5 text-pine-600" /><h3 className="font-display font-bold text-lg text-bark-900">全国のキャンプ場をさがす</h3></div>
+                    <p className="text-xs text-bark-400 font-medium leading-relaxed">都道府県を選ぶと、OpenStreetMap に登録された全国のキャンプ場の基本情報を表示します。<strong className="text-bark-500">これらは未確認の参考情報</strong>です。施設の関係者は「関係者ですか？」から本人確認の上で認証済に昇格できます。</p>
+                    <select value={osmPref} onChange={e => loadPrefCamps(e.target.value)} className={inputCls}>
+                      <option value="">都道府県を選択…</option>
+                      {PREFECTURES_ISO.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
+                    </select>
+                    {osmLoading && <div className="py-8 text-center text-bark-400 font-bold">読み込み中…</div>}
+                    {osmError && <div className="py-4 text-center text-ember-500 font-medium text-sm">{osmError}</div>}
+                    {!osmLoading && !osmError && osmPref && (
+                      <div className="space-y-3">
+                        <p className="text-sm font-bold text-bark-500">{osmList.length}件のキャンプ場</p>
+                        <div className="space-y-2.5">
+                          {[...osmList].sort((a, b) => { const fa = favFacilities.includes(a.id), fb = favFacilities.includes(b.id); return fa === fb ? 0 : (fa ? -1 : 1); }).map(c => (
+                            <div key={c.id} className="flex items-start gap-3 rounded-2xl border border-bark-200 bg-canvas p-3.5">
+                              <div className="min-w-0 flex-1">
+                                <h4 className="font-bold text-bark-900 flex items-center gap-1.5">{favFacilities.includes(c.id) && <Icons.Heart filled className="w-4 h-4 text-ember-500 shrink-0" />}<span className="min-w-0 break-words">{c.name}</span></h4>
+                                {(c.location || c.operator) && <p className="text-xs text-bark-500 font-medium mt-0.5 break-words">{c.location || c.operator}</p>}
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                  {c.lat != null && <a href={`https://www.google.com/maps/search/?api=1&query=${c.lat},${c.lon}`} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-pine-700 bg-white border border-bark-200 rounded-lg px-2.5 py-1.5 inline-flex items-center gap-1"><Icons.Pin className="w-3.5 h-3.5" />地図</a>}
+                                  {c.website && <a href={c.website} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-pine-700 bg-white border border-bark-200 rounded-lg px-2.5 py-1.5 inline-flex items-center gap-1"><Icons.Globe className="w-3.5 h-3.5" />公式</a>}
+                                  {c.phone && <a href={`tel:${c.phone}`} className="text-xs font-bold text-pine-700 bg-white border border-bark-200 rounded-lg px-2.5 py-1.5">☎ {c.phone}</a>}
+                                  <button onClick={() => claimReference(c)} className="text-xs font-bold text-white bg-pine-700 hover:bg-pine-600 rounded-lg px-2.5 py-1.5 inline-flex items-center gap-1 transition"><Icons.Shield className="w-3.5 h-3.5" />関係者ですか？</button>
+                                </div>
+                              </div>
+                              <button onClick={() => toggleFavFacility(c.id)} className="shrink-0 w-9 h-9 rounded-full bg-white border border-bark-200 flex items-center justify-center active:scale-90 transition"><Icons.Heart filled={favFacilities.includes(c.id)} className={`w-4 h-4 ${favFacilities.includes(c.id) ? 'text-ember-500' : 'text-bark-300'}`} /></button>
+                            </div>
+                          ))}
+                          {osmList.length === 0 && <p className="py-6 text-center text-bark-400 font-medium text-sm">この都道府県の登録データが見つかりませんでした。</p>}
+                        </div>
+                        <p className="text-[11px] text-bark-400 font-medium pt-1">データ提供：© OpenStreetMap contributors（ODbL）</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* ---------------- GUIDE ---------------- */}
             {activeTab === 'guide' && (
               <div className="space-y-5 anim-fade">
                 <div className="bg-pine-800 text-white rounded-4xl p-6 sm:p-8 shadow-lift relative overflow-hidden">
                   <div className="absolute -right-4 -bottom-6 opacity-[0.13]"><Brand className="w-40 h-40" /></div>
                   <div className="relative space-y-4">
-                    <h2 className="font-display font-bold text-2xl sm:text-3xl">クワカブキャンプ場<br/>ガイドマップ</h2>
-                    <div className="space-y-2 text-sm font-medium text-pine-100">
-                      <p className="flex items-center gap-2"><Icons.Pin className="w-4 h-4 text-pine-300 shrink-0" />北海道北広島市大曲</p>
-                      <p className="flex items-center gap-2"><span className="w-4 text-center shrink-0">🚃</span>JR千歳線「上野幌駅」から徒歩約10分</p>
-                    </div>
+                    <h2 className="font-display font-bold text-2xl sm:text-3xl">キャンプで<br/>つながる。</h2>
+                    <p className="text-sm font-medium text-pine-100 leading-relaxed max-w-sm">おすすめのキャンプ場の紹介と、キャンパー同士の交流をひとつに。口コミ・コミュニティ企画・たきび広場で、キャンプをもっと楽しく。</p>
                   </div>
                 </div>
 
-                <div className="bg-white border border-bark-200 rounded-4xl p-6 shadow-soft">
-                  <p className="text-bark-600 font-medium leading-relaxed">「北広島クワカブキャンプ場」は、札幌に隣接する北広島市大曲の豊かなシラカバ・コナラ林に位置するプライベート自然スペースです。駅から徒歩10分という抜群のアクセスでありながら、本格的な森林環境に包まれ、夏の昆虫採集や自然観察に最高です。</p>
-                </div>
-
-                <div className="bg-white border border-bark-200 rounded-4xl shadow-soft overflow-hidden">
-                  <div className="px-5 pt-5 pb-3 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5"><div className="w-10 h-10 rounded-2xl bg-pine-50 text-pine-600 flex items-center justify-center"><Icons.Map className="w-5 h-5" /></div><h3 className="font-display font-bold text-lg text-bark-900">アクセスマップ</h3></div>
-                    <a href="https://maps.app.goo.gl/d51mKodHaPpowNVR6" target="_blank" rel="noopener noreferrer" className="shrink-0 px-4 py-2.5 bg-pine-700 hover:bg-pine-600 text-white text-sm font-bold rounded-xl transition flex items-center gap-1.5"><Icons.Pin className="w-4 h-4" />ルート案内</a>
-                  </div>
-                  <div className="relative w-full aspect-[4/3] sm:aspect-[16/9] bg-canvas">
-                    <iframe title="キャンプ場の地図" src="https://maps.google.com/maps?q=%E5%8C%97%E5%BA%83%E5%B3%B6%E3%82%AF%E3%83%AF%E3%82%AB%E3%83%96%E3%82%AD%E3%83%A3%E3%83%B3%E3%83%97%E5%A0%B4&z=15&output=embed" className="absolute inset-0 w-full h-full border-0" loading="lazy" referrerPolicy="no-referrer-when-downgrade"></iframe>
-                  </div>
-                  <a href="https://maps.app.goo.gl/d51mKodHaPpowNVR6" target="_blank" rel="noopener noreferrer" className="block px-5 py-3.5 text-center text-sm font-bold text-pine-700 hover:bg-pine-50 transition border-t border-bark-100">Googleマップで開く →</a>
+                <div className="bg-white border border-bark-200 rounded-4xl p-6 shadow-soft space-y-3">
+                  <h3 className="font-display font-bold text-lg text-bark-900">このサイトについて</h3>
+                  <p className="text-bark-600 font-medium leading-relaxed">CAMP LINKは、キャンプ好きが集まる「紹介＆交流サイト」です。おすすめのキャンプ場やギアの口コミをシェアしたり、一緒に出かける仲間を見つけたり。初心者からベテランまで、だれでも気軽に参加できます。</p>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {SITE_TYPES.map(s => (
-                    <div key={s.id} className="bg-white border border-bark-200 rounded-4xl p-5 shadow-soft space-y-2">
-                      <div className="text-3xl">{s.icon}</div>
-                      <div className="flex items-center gap-2"><span className={`w-2.5 h-2.5 rounded-full ${s.dot}`} /><h3 className="font-bold text-bark-900">{s.short}</h3></div>
-                      <p className="text-sm text-bark-500 font-medium leading-relaxed">{s.desc}</p>
-                    </div>
-                  ))}
+                  <div className="bg-white border border-bark-200 rounded-4xl p-5 shadow-soft space-y-2">
+                    <div className="text-3xl">⭐</div>
+                    <h3 className="font-bold text-bark-900">口コミを読む・書く</h3>
+                    <p className="text-sm text-bark-500 font-medium leading-relaxed">行ったキャンプ場の感想やおすすめポイントをシェア。</p>
+                  </div>
+                  <div className="bg-white border border-bark-200 rounded-4xl p-5 shadow-soft space-y-2">
+                    <div className="text-3xl">🏕️</div>
+                    <h3 className="font-bold text-bark-900">コミュニティ企画に参加</h3>
+                    <p className="text-sm text-bark-500 font-medium leading-relaxed">グルキャンやイベントに手を挙げて仲間と集まろう。</p>
+                  </div>
+                  <div className="bg-white border border-bark-200 rounded-4xl p-5 shadow-soft space-y-2">
+                    <div className="text-3xl">🔥</div>
+                    <h3 className="font-bold text-bark-900">たきび広場で雑談</h3>
+                    <p className="text-sm text-bark-500 font-medium leading-relaxed">道具の質問や情報交換をリアルタイムで。</p>
+                  </div>
                 </div>
 
                 <div className="bg-white border border-bark-200 rounded-4xl p-6 shadow-soft space-y-4">
-                  <h3 className="font-display font-bold text-lg text-bark-900">⚠️ ご利用ルール</h3>
+                  <h3 className="font-display font-bold text-lg text-bark-900">🤝 交流のマナー</h3>
                   <ul className="space-y-3">
-                    <li className="flex items-start gap-3 text-sm text-bark-600 font-medium"><span className="w-6 h-6 rounded-lg bg-pine-50 text-pine-600 flex items-center justify-center shrink-0"><Icons.Check className="w-4 h-4" /></span><span><strong className="text-bark-800">消灯時間（22時）：</strong>静寂の森を守るため、消灯以降はお静かにお過ごしください。</span></li>
-                    <li className="flex items-start gap-3 text-sm text-bark-600 font-medium"><span className="w-6 h-6 rounded-lg bg-pine-50 text-pine-600 flex items-center justify-center shrink-0"><Icons.Check className="w-4 h-4" /></span><span><strong className="text-bark-800">自然環境の保護：</strong>白樺の樹皮を剥がしたり、トラップの放置はお控えください。</span></li>
+                    <li className="flex items-start gap-3 text-sm text-bark-600 font-medium"><span className="w-6 h-6 rounded-lg bg-pine-50 text-pine-600 flex items-center justify-center shrink-0"><Icons.Check className="w-4 h-4" /></span><span><strong className="text-bark-800">思いやりを大切に：</strong>初心者もベテランも、お互いを尊重して楽しく交流しましょう。</span></li>
+                    <li className="flex items-start gap-3 text-sm text-bark-600 font-medium"><span className="w-6 h-6 rounded-lg bg-pine-50 text-pine-600 flex items-center justify-center shrink-0"><Icons.Check className="w-4 h-4" /></span><span><strong className="text-bark-800">マナーを守って：</strong>宣伝目的の投稿や、他者への迷惑行為はお控えください。</span></li>
                   </ul>
                 </div>
 
